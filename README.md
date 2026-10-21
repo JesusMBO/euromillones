@@ -11,7 +11,8 @@ Web para gestionar la peña de Euromillones de los compañeros: cada uno ve su s
 - Lo que sobra va al **bote**, que paga apuestas extra otras semanas.
 - Al apuntar el premio: si es de **menos de 2.000 €** se suma a partes iguales al saldo de quienes jugaron (los céntimos que no se pueden repartir van al bote). Si es de **2.000 € o más** no pasa por los saldos: cada participante lo cobra en el banco identificándose con el acta del sorteo.
 - Todos los miembros ven los saldos y movimientos de todos (transparencia). El email de cada uno solo lo ven los administradores.
-- Se entra sin contraseña: un enlace o código al correo. Las cuentas nuevas quedan **pendientes** hasta que un administrador las aprueba.
+- Se entra sin contraseña: un enlace o código al correo. Al darse de alta cada participante pone su nombre, su **número de DNI/NIE** (sin copia del documento) y acepta las [normas](normas.html). Las cuentas nuevas quedan **pendientes** hasta que un administrador las aprueba, y no se pueden aprobar sin DNI.
+- El DNI completo solo lo ven el propio participante y los administradores. Si cambian las normas, se sube `normas_version` en la tabla `ajustes` y todos tendrán que aceptarlas de nuevo al entrar.
 
 Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supabase y se pueden cambiar.
 
@@ -29,12 +30,14 @@ Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supab
 | `supabase/sql/03_eliminar_pendientes.sql` | Eliminar cuentas pendientes creadas por error |
 | `supabase/sql/04_correcciones.sql` | Corregir sorteos apuntados mal |
 | `supabase/sql/05_reparto_premios.sql` | Reparto según el reglamento: saldos o cobro en el banco |
+| `supabase/sql/06_dni_normas.sql` | DNI/NIE y aceptación de las normas |
+| `normas.html` | Normas de la peña |
 
 ## Puesta en marcha (una sola vez)
 
 ### 1. Supabase
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (región Europa).
-2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql`, `03_eliminar_pendientes.sql`, `04_correcciones.sql` y `05_reparto_premios.sql`.
+2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql`, `03_eliminar_pendientes.sql`, `04_correcciones.sql`, `05_reparto_premios.sql` y `06_dni_normas.sql`.
 3. **Project Settings → API**: copia la *Project URL* y la clave *publishable / anon* en `config.js`. **Nunca** la clave `service_role` / `secret`.
 
 ### 2. Login por email

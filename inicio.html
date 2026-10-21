@@ -19,12 +19,20 @@
   <main class="dashboard">
     <div id="cargando" class="loader" aria-label="Cargando"></div>
 
-    <!-- Primera vez: pedir el nombre -->
+    <!-- Primera vez (o normas nuevas): nombre, DNI y aceptar las normas -->
     <section id="sin-nombre" class="card narrow hidden">
-      <h2>¿Cómo te llamas?</h2>
-      <p class="muted">Es el nombre que verán tus compañeros en la lista de saldos.</p>
-      <form id="form-nombre">
-        <input id="nombre" maxlength="60" placeholder="Nombre y apellido" autocomplete="name" required>
+      <h2 id="registro-titulo">Completa tu alta</h2>
+      <p class="muted" id="registro-texto">Necesitamos estos datos para acreditar que participas en la peña.</p>
+      <form id="form-nombre" novalidate>
+        <label for="nombre">Nombre y apellidos</label>
+        <input id="nombre" maxlength="60" placeholder="Como te verán tus compañeros" autocomplete="name" required>
+        <label for="dni">DNI / NIE</label>
+        <input id="dni" maxlength="12" placeholder="12345678Z" autocapitalize="characters" autocomplete="off" required>
+        <p class="muted small">Solo el número, sin foto. Solo lo ven los administradores.</p>
+        <label class="check">
+          <input id="acepta" type="checkbox" required>
+          <span>He leído y acepto las <a href="normas.html" target="_blank" rel="noopener">normas de la peña</a></span>
+        </label>
         <button class="btn" type="submit"><span class="label">Guardar</span></button>
       </form>
     </section>
@@ -99,6 +107,8 @@
         <h2>Mi extracto</h2>
         <ul class="lista" id="mi-extracto"></ul>
       </section>
+
+      <p class="muted small centro"><a href="normas.html">📜 Normas de la peña</a></p>
     </div>
   </main>
 
@@ -162,7 +172,19 @@
         if (!perfil) return;
         pintarTopbar(perfil, "inicio");
 
-        if (!perfil.nombre) return mostrarSeccion("sin-nombre");
+        // Falta el DNI, el nombre o aceptar la versión vigente de las normas
+        const { data: aj, error } = await sb.from("ajustes").select("normas_version").single();
+        if (error) throw new Error(textoError(error));
+        if (!perfil.nombre || !perfil.dni || perfil.normas_version !== aj.normas_version) {
+          $("#nombre").value = perfil.nombre || "";
+          $("#dni").value = perfil.dni || "";
+          $("#dni").readOnly = !!perfil.dni;
+          if (perfil.dni) {
+            $("#registro-titulo").textContent = "Las normas han cambiado";
+            $("#registro-texto").textContent = "Léelas y acéptalas de nuevo para seguir participando.";
+          }
+          return mostrarSeccion("sin-nombre");
+        }
         if (perfil.estado !== "activo") {
           $("#no-activo-titulo").textContent = perfil.estado === "pendiente" ? "Cuenta pendiente de aprobación" : "Estás dado de baja";
           $("#no-activo-texto").textContent = perfil.estado === "pendiente"
@@ -310,8 +332,12 @@
 
     $("#form-nombre").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const dni = normalizarDni($("#dni").value);
+      if ($("#nombre").value.trim().length < 2) return aviso("Escribe tu nombre y apellidos.", "error");
+      if (!dniValido(dni)) return aviso("El DNI/NIE no es válido. Revisa los números y la letra.", "error");
+      if (!$("#acepta").checked) return aviso("Tienes que aceptar las normas de la peña.", "error");
       try {
-        await rpc("guardar_nombre", { p_nombre: $("#nombre").value });
+        await rpc("completar_registro", { p_nombre: $("#nombre").value, p_dni: dni, p_acepta: true });
         location.reload();
       } catch (err) {
         aviso(err.message, "error");

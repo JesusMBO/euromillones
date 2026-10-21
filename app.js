@@ -75,6 +75,20 @@ async function salir() {
   location.replace("index.html");
 }
 
+// DNI (12345678Z) o NIE (X1234567L): misma comprobación que dni_valido() en la base de datos
+function normalizarDni(texto) {
+  return (texto || "").toUpperCase().replace(/[\s.-]/g, "");
+}
+
+function dniValido(dni) {
+  const v = normalizarDni(dni);
+  let numero;
+  if (/^[XYZ]\d{7}[A-Z]$/.test(v)) numero = "XYZ".indexOf(v[0]) + v.slice(1, 8);
+  else if (/^\d{8}[A-Z]$/.test(v)) numero = v.slice(0, 8);
+  else return false;
+  return "TRWAGMYFPDXBNJZSQVHLCKE"[Number(numero) % 23] === v[8];
+}
+
 // Semáforo del saldo según cuántas semanas cubre
 function colorSaldo(saldo, cuota) {
   if (saldo < cuota) return "rojo";

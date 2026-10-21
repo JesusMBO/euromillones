@@ -357,9 +357,14 @@
       $("#n-pendientes").textContent = pendientes ? `${pendientes} por aprobar` : `${perfiles.filter(p => p.estado === "activo").length} activos`;
 
       $("#lista-perfiles").innerHTML = lista.map(p => {
+        const completo = p.dni && p.acepta_normas;
+        const datos = completo
+          ? `DNI ${escapeHtml(p.dni)} · normas aceptadas el ${fecha(p.acepta_normas)}`
+          : `<span class="falta">⚠️ Falta DNI y aceptar las normas</span>`;
+        const botonDni = p.dni ? `<button class="btn-ghost" data-dni="${escapeHtml(p.dni)}" data-id="${p.id}" type="button">Corregir DNI</button>` : "";
         const botones = p.id === perfil.id ? `<span class="tag">tú</span>`
           : p.estado === "pendiente" ? `
-              <button class="btn-ghost ok" data-estado="activo" data-id="${p.id}" type="button">Aprobar</button>
+              <button class="btn-ghost ok" data-estado="activo" data-id="${p.id}" type="button" ${completo ? "" : "disabled title='Primero tiene que entrar y completar su alta'"}>Aprobar</button>
               <button class="btn-ghost danger" data-eliminar="true" data-id="${p.id}" type="button">Eliminar</button>`
           : p.estado === "activo" ? `
               <button class="btn-ghost" data-admin="${!p.es_admin}" data-id="${p.id}" type="button">${p.es_admin ? "Quitar admin" : "Hacer admin"}</button>
@@ -369,8 +374,9 @@
           <div>
             <div class="mov-tipo">${escapeHtml(p.nombre || "(sin nombre)")} ${p.es_admin ? "<span class='tag'>admin</span>" : ""} ${p.estado !== "activo" ? `<span class="tag">${p.estado}</span>` : ""}</div>
             <div class="muted small">${escapeHtml(p.email)}${p.estado !== "pendiente" ? " · saldo " + euro(saldos[p.id] || 0) : ""}</div>
+            <div class="muted small">${datos}</div>
           </div>
-          <div class="acciones">${botones}</div>
+          <div class="acciones">${botones}${botonDni}</div>
         </li>`;
       }).join("");
 
@@ -386,6 +392,12 @@
       if (b.dataset.eliminar) {
         if (!confirm(`¿Eliminar la cuenta de ${nombreDe(b.dataset.id)}? Se borrará del todo y no se puede deshacer.`)) return;
         return accion(b, () => rpc("eliminar_pendiente", { p_perfil: b.dataset.id }), "Cuenta eliminada.");
+      }
+      if (b.dataset.dni) {
+        const nuevo = prompt(`DNI/NIE correcto de ${nombreDe(b.dataset.id)}:`, b.dataset.dni);
+        if (!nuevo || normalizarDni(nuevo) === b.dataset.dni) return;
+        if (!dniValido(nuevo)) return aviso("El DNI/NIE no es válido. Revisa los números y la letra.", "error");
+        return accion(b, () => rpc("cambiar_dni", { p_perfil: b.dataset.id, p_dni: normalizarDni(nuevo) }), "DNI corregido.");
       }
       await accion(b, b.dataset.estado
         ? () => rpc("cambiar_estado", { p_perfil: b.dataset.id, p_estado: b.dataset.estado })
