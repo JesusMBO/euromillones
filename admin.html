@@ -306,7 +306,9 @@
 
       $("#lista-perfiles").innerHTML = lista.map(p => {
         const botones = p.id === perfil.id ? `<span class="tag">tú</span>`
-          : p.estado === "pendiente" ? `<button class="btn-ghost ok" data-estado="activo" data-id="${p.id}" type="button">Aprobar</button>`
+          : p.estado === "pendiente" ? `
+              <button class="btn-ghost ok" data-estado="activo" data-id="${p.id}" type="button">Aprobar</button>
+              <button class="btn-ghost danger" data-eliminar="true" data-id="${p.id}" type="button">Eliminar</button>`
           : p.estado === "activo" ? `
               <button class="btn-ghost" data-admin="${!p.es_admin}" data-id="${p.id}" type="button">${p.es_admin ? "Quitar admin" : "Hacer admin"}</button>
               <button class="btn-ghost danger" data-estado="baja" data-id="${p.id}" type="button">Baja</button>`
@@ -329,6 +331,10 @@
       const b = e.target.closest("button[data-id]");
       if (!b) return;
       if (b.dataset.estado === "baja" && !confirm(`¿Dar de baja a ${nombreDe(b.dataset.id)}? Dejará de jugar; su saldo se mantiene.`)) return;
+      if (b.dataset.eliminar) {
+        if (!confirm(`¿Eliminar la cuenta de ${nombreDe(b.dataset.id)}? Se borrará del todo y no se puede deshacer.`)) return;
+        return accion(b, () => rpc("eliminar_pendiente", { p_perfil: b.dataset.id }), "Cuenta eliminada.");
+      }
       await accion(b, b.dataset.estado
         ? () => rpc("cambiar_estado", { p_perfil: b.dataset.id, p_estado: b.dataset.estado })
         : () => rpc("cambiar_admin", { p_perfil: b.dataset.id, p_admin: b.dataset.admin === "true" }),

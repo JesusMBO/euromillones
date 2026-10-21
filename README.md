@@ -25,12 +25,13 @@ Los importes (1 €, 2,50 € y 50 €) están en la tabla `ajustes` de Supabase
 | `config.js` | Dirección y clave pública de Supabase |
 | `supabase/sql/01_esquema.sql` | Base de datos, reglas de seguridad y toda la lógica del dinero |
 | `supabase/sql/02_resguardos.sql` | Carpeta de resguardos y marcar sorteos como jugados |
+| `supabase/sql/03_eliminar_pendientes.sql` | Eliminar cuentas pendientes creadas por error |
 
 ## Puesta en marcha (una sola vez)
 
 ### 1. Supabase
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (región Europa).
-2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, en otra consulta nueva, con `supabase/sql/02_resguardos.sql`.
+2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql` y `03_eliminar_pendientes.sql`.
 3. **Project Settings → API**: copia la *Project URL* y la clave *publishable / anon* en `config.js`. **Nunca** la clave `service_role` / `secret`.
 
 ### 2. Login por email
