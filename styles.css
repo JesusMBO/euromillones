@@ -317,6 +317,9 @@ input:focus, select:focus {
 .card-value { margin-top: 4px; font-size: 1.6rem; font-weight: 800; }
 .card-sub { margin-top: 2px; font-size: 0.82rem; color: var(--muted); }
 
+.premio-banco { border: 2px solid var(--gold); background: linear-gradient(135deg, rgba(245, 179, 1, 0.14), transparent); }
+.premio-banco p { margin: 6px 0 0; line-height: 1.5; }
+
 .destacado {
   margin: 8px 0 4px;
   padding: 14px 16px;

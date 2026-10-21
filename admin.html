@@ -248,9 +248,11 @@
           const premio = Number($("#premio").value) || 0;
           const porPersona = Math.floor(premio * 100 / abierto.participantes) / 100;
           $("#previa-premio").textContent = premio <= 0 ? "Sin premio: no cambia nada."
-            : porPersona >= Number(ajustes.umbral_reparto)
-              ? `Sale a ${euro(porPersona)} por persona → se REPARTE entre los ${abierto.participantes} participantes.`
-              : `Sale a ${euro(porPersona)} por persona (menos de ${euro(ajustes.umbral_reparto)}) → va al BOTE.`;
+            : premio >= Number(ajustes.umbral_banco)
+              ? `${euro(ajustes.umbral_banco)} o más → se cobra EN EL BANCO: no se suma a los saldos. Todos los participantes deben identificarse en el banco con el acta (${euro(porPersona)} por persona).`
+              : porPersona > 0
+                ? `Sale a ${euro(porPersona)} por persona → se SUMA al saldo de los ${abierto.participantes} participantes.`
+                : `No llega a 1 céntimo por persona → va al bote.`;
         };
         $("#premio").addEventListener("input", previa);
 
@@ -310,7 +312,7 @@
         ${ultimo ? `
           <details class="corregir">
             <summary>Corregir el último sorteo (${fecha(ultimo.fecha)})</summary>
-            <p class="muted small">Premio apuntado: <b>${euro(ultimo.premio)}</b>${ultimo.premio_por_persona ? ` (${euro(ultimo.premio_por_persona)} por persona)` : ultimo.premio > 0 ? " (al bote)" : ""}.</p>
+            <p class="muted small">Premio apuntado: <b>${euro(ultimo.premio)}</b>${ultimo.cobro_banco ? " (cobro en el banco)" : ultimo.premio_por_persona > 0 ? ` (${euro(ultimo.premio_por_persona)} por persona)` : ultimo.premio > 0 ? " (al bote)" : ""}.</p>
             <div class="fila-botones">
               <button class="btn-ghost danger" id="deshacer-resultado" type="button">Deshacer el resultado</button>
               <span class="muted small">vuelve a dejarlo pendiente para apuntar el premio bien</span>
@@ -326,7 +328,7 @@
 
       if (ultimo) {
         $("#deshacer-resultado").addEventListener("click", async (e) => {
-          if (!confirm(`¿Deshacer el resultado del sorteo del ${fecha(ultimo.fecha)}? Se quitará el premio de ${euro(ultimo.premio)} de los saldos o del bote.`)) return;
+          if (!confirm(`¿Deshacer el resultado del sorteo del ${fecha(ultimo.fecha)}? Se quitará el premio de ${euro(ultimo.premio)} de los saldos${ultimo.cobro_banco ? "" : " y del bote"}.`)) return;
           await accion(e.target, () => rpc("deshacer_resultado", { p_sorteo: ultimo.id }), "Resultado deshecho. Apúntalo de nuevo.");
         });
       }

@@ -10,7 +10,8 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-const formatoEuro = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
+// useGrouping "always": en español 2000 € se escribiría "2000" sin punto de miles
+const formatoEuro = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", useGrouping: "always" });
 function euro(n) {
   return formatoEuro.format(Number(n) || 0);
 }

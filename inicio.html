@@ -37,6 +37,9 @@
     </section>
 
     <div id="contenido" class="hidden">
+      <!-- Premio grande: se cobra en el banco -->
+      <section class="card premio-banco hidden" id="aviso-banco"></section>
+
       <!-- Mi saldo -->
       <section class="hero">
         <div class="hero-label">Mi saldo</div>
@@ -51,7 +54,7 @@
         <div class="card stat">
           <div class="card-label">Bote acumulado</div>
           <div class="card-value" id="bote"></div>
-          <div class="card-sub">Se reinvierte en apuestas extra</div>
+          <div class="card-sub">Sobrantes que pagan apuestas extra</div>
         </div>
         <div class="card stat">
           <div class="card-label">Participantes activos</div>
@@ -218,7 +221,17 @@
       $("#ultimo-sorteo").textContent = ultimo ? fecha(ultimo.fecha) : "—";
       $("#ultimo-sorteo-sub").textContent = !ultimo ? "Aún no se ha jugado"
         : ultimo.estado === "cerrado" ? `${ultimo.apuestas} apuestas · ${ultimo.jugado ? "jugado, esperando resultado" : "pendiente de jugar"}`
-        : ultimo.premio > 0 ? `Premio: ${euro(ultimo.premio)}` : "Sin premio";
+        : ultimo.premio > 0 ? `Premio: ${euro(ultimo.premio)}${ultimo.cobro_banco ? " · cobro en el banco" : ""}` : "Sin premio";
+
+      // Aviso del último premio que hay que cobrar en el banco
+      const banco = rSorteos.data.find(s => s.cobro_banco);
+      $("#aviso-banco").classList.toggle("hidden", !banco || banco.id !== ultimo.id);
+      if (banco) {
+        $("#aviso-banco").innerHTML = `
+          <h2>🏦 ¡Premio de ${euro(banco.premio)}!</h2>
+          <p>El sorteo del <b>${fecha(banco.fecha)}</b> ha ganado ${euro(banco.premio)} (${euro(banco.premio_por_persona)} por participante, antes de impuestos).</p>
+          <p class="muted small">Por ser de ${euro(ajustes.umbral_banco)} o más, no se suma a los saldos: cada participante lo cobra en el banco identificándose con su DNI y el acta del sorteo. El administrador os dirá cuándo ir.</p>`;
+      }
 
       pintarSaldos();
       pintarSorteos(rSorteos.data);
@@ -252,7 +265,8 @@
           <td>${s.participantes}</td>
           <td>${s.apuestas}</td>
           <td>${s.estado === "cerrado" ? `<span class='tag'>${s.jugado ? "🧾 jugado" : "pendiente"}</span>`
-              : s.premio > 0 ? `<b>${euro(s.premio)}</b>${s.premio_por_persona ? `<div class="muted small">${euro(s.premio_por_persona)}/persona</div>` : `<div class="muted small">al bote</div>`}`
+              : s.premio > 0 ? `<b>${euro(s.premio)}</b><div class="muted small">${s.cobro_banco ? "🏦 cobro en el banco"
+                  : s.premio_por_persona > 0 ? `${euro(s.premio_por_persona)}/persona` : "al bote"}</div>`
               : "—"}</td>
         </tr>`).join("")
         : `<tr><td colspan="4" class="vacio">Aún no hay sorteos.</td></tr>`;
