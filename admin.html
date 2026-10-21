@@ -88,7 +88,7 @@
   <script>
     if (!CONFIGURADO) avisoSinConfigurar();
 
-    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0, ultimoCierre = null, bajasPedidas = [];
+    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0, ultimoCierre = null, bajasPedidas = [], haJugado = new Set();
 
     async function iniciar() {
       try {
@@ -125,6 +125,13 @@
       bote = Number(rBote);
       saldos = {};
       rSaldos.forEach(s => (saldos[s.id] = Number(s.saldo)));
+
+      // Quién de los que están de baja ha jugado algún sorteo: a esos no se les puede eliminar
+      const deBaja = perfiles.filter(p => p.estado === "baja");
+      const cuentas = await Promise.all(deBaja.map(p =>
+        sb.from("participaciones").select("sorteo_id", { count: "exact", head: true }).eq("perfil_id", p.id)));
+      for (const r of cuentas) if (r.error) throw new Error(textoError(r.error));
+      haJugado = new Set(deBaja.filter((p, i) => cuentas[i].count > 0).map(p => p.id));
 
       pintarAvisos(rAvisos.data);
       pintarBajas();
@@ -441,7 +448,7 @@
               <button class="btn-ghost" data-admin="${!p.es_admin}" data-id="${p.id}" type="button">${p.es_admin ? "Quitar admin" : "Hacer admin"}</button>
               <button class="btn-ghost danger" data-estado="baja" data-id="${p.id}" type="button">Baja</button>`
           : `<button class="btn-ghost" data-estado="activo" data-id="${p.id}" type="button">Reactivar</button>
-             <button class="btn-ghost danger" data-eliminar-baja="true" data-id="${p.id}" type="button">Eliminar definitivamente</button>`;
+             ${botonEliminarBaja(p)}`;
         return `<li class="mov">
           <div>
             <div class="mov-tipo">${escapeHtml(p.nombre || "(sin nombre)")} ${p.es_admin ? "<span class='tag'>admin</span>" : ""} ${p.estado !== "activo" ? `<span class="tag">${p.estado}</span>` : ""}</div>
@@ -455,6 +462,18 @@
       $("#mov-perfil").innerHTML = perfiles
         .filter(p => p.estado !== "pendiente")
         .map(p => `<option value="${p.id}">${escapeHtml(p.nombre || p.email)}</option>`).join("");
+    }
+
+    // Activo solo si de verdad se puede borrar; si no, desactivado y con el motivo al pasar el ratón
+    function botonEliminarBaja(p) {
+      const saldo = saldos[p.id] || 0;
+      const motivo = haJugado.has(p.id)
+        ? "No se puede eliminar porque ha jugado algún sorteo: figura en las actas como cotitular."
+        : saldo !== 0 ? `No se puede eliminar porque le quedan ${euro(saldo)} de saldo. Devuélveselos antes.` : "";
+      if (!motivo) return `<button class="btn-ghost danger" data-eliminar-baja="true" data-id="${p.id}" type="button">Eliminar definitivamente</button>`;
+      return `<span class="boton-bloqueado" title="${escapeHtml(motivo)}" tabindex="0" aria-label="${escapeHtml(motivo)}">
+                <button class="btn-ghost" type="button" disabled>Eliminar definitivamente</button>
+              </span>`;
     }
 
     $("#lista-perfiles").addEventListener("click", async (e) => {

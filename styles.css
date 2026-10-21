@@ -425,6 +425,9 @@ input:focus, select:focus {
 .card.narrow form { text-align: left; }
 .centro { text-align: center; }
 .falta { color: var(--neg); font-weight: 600; }
+/* Botón desactivado con explicación: el aviso (title) lo muestra el span, porque un botón desactivado no recibe el ratón */
+.boton-bloqueado { display: inline-flex; cursor: not-allowed; }
+.boton-bloqueado .btn-ghost { pointer-events: none; opacity: 0.45; }
 .centro a, .normas a { color: var(--primary); }
 
 /* ---------- Acta del sorteo ---------- */
