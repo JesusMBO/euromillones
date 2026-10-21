@@ -36,6 +36,7 @@ Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supab
 | `supabase/sql/07_acta.sql` | Datos del acta de cada sorteo (DNI parcial y porcentajes) |
 | `supabase/sql/08_cierre_automatico.sql` | Cierre automático de los jueves (pg_cron) y registro de cierres |
 | `supabase/sql/09_bajas.sql` | Pedir la baja y tramitarla con la devolución del saldo |
+| `supabase/sql/10_borrar_usuario_baja.sql` | Función `BorrarUsuarioBajaSinJugar('email')` para borrar del todo, desde el SQL Editor, a quien está de baja y nunca ha jugado |
 | `normas.html` | Normas de la peña |
 | `acta.html` | Acta imprimible de cada sorteo |
 
@@ -43,7 +44,7 @@ Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supab
 
 ### 1. Supabase
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (región Europa).
-2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql`, `03_eliminar_pendientes.sql`, `04_correcciones.sql`, `05_reparto_premios.sql`, `06_dni_normas.sql`, `07_acta.sql`, `08_cierre_automatico.sql` y `09_bajas.sql`.
+2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql`, `03_eliminar_pendientes.sql`, `04_correcciones.sql`, `05_reparto_premios.sql`, `06_dni_normas.sql`, `07_acta.sql`, `08_cierre_automatico.sql`, `09_bajas.sql` y `10_borrar_usuario_baja.sql`.
 3. **Project Settings → API**: copia la *Project URL* y la clave *publishable / anon* en `config.js`. **Nunca** la clave `service_role` / `secret`.
 
 ### 2. Login por email
