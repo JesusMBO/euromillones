@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EuromillonesCAIB · Acta del sorteo</title>
+  <meta name="theme-color" content="#1e3a8a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+
+  <main class="dashboard">
+    <div id="cargando" class="loader" aria-label="Cargando"></div>
+
+    <div id="contenido" class="hidden">
+      <div class="fila-botones no-print">
+        <a class="btn-ghost" href="inicio.html">← Volver</a>
+        <button class="btn btn-inline" id="imprimir" type="button"><span class="label">🖨️ Imprimir o guardar en PDF</span></button>
+        <label class="check hidden" id="opcion-completo">
+          <input id="dni-completo" type="checkbox">
+          <span>Mostrar DNI completos (solo administradores)</span>
+        </label>
+      </div>
+
+      <article class="card acta">
+        <header class="acta-cabecera">
+          <div>
+            <div class="muted small">EuromillonesCAIB · Peña de Euromillones</div>
+            <h1>Acta del sorteo del <span id="acta-fecha"></span></h1>
+          </div>
+          <span class="tag" id="acta-estado"></span>
+        </header>
+
+        <dl class="acta-datos">
+          <div><dt>Juego</dt><dd>Euromillones</dd></div>
+          <div><dt>Fecha del sorteo</dt><dd id="d-fecha"></dd></div>
+          <div><dt>Cierre de la lista</dt><dd id="d-cierre"></dd></div>
+          <div><dt>Participantes</dt><dd id="d-participantes"></dd></div>
+          <div><dt>Recaudado</dt><dd id="d-recaudado"></dd></div>
+          <div><dt>Apuestas compradas</dt><dd id="d-apuestas"></dd></div>
+          <div><dt>Participación de cada uno</dt><dd id="d-cuota"></dd></div>
+          <div><dt>Resultado</dt><dd id="d-resultado"></dd></div>
+        </dl>
+
+        <h2>Resguardo oficial</h2>
+        <div id="acta-resguardos"></div>
+
+        <h2>Participantes cotitulares</h2>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>#</th><th>Nombre</th><th>DNI/NIE</th><th>Aporta</th><th>%</th></tr></thead>
+            <tbody id="acta-participantes"></tbody>
+          </table>
+        </div>
+
+        <p class="acta-pie muted small">
+          Las personas de esta lista son cotitulares, a partes iguales según su aportación, de las apuestas de este sorteo,
+          conforme a las <a href="normas.html">normas de la peña</a>. La lista se cerró en el momento indicado
+          y no puede modificarse. Documento generado el <span id="generado"></span>.
+        </p>
+      </article>
+    </div>
+  </main>
+
+  <script>
+    if (!CONFIGURADO) avisoSinConfigurar();
+
+    const sorteoId = Number(new URLSearchParams(location.search).get("id"));
+    let sorteo;
+
+    async function iniciar() {
+      try {
+        const perfil = await cargarPerfil();
+        if (!perfil) return;
+        pintarTopbar(perfil, "acta");
+        if (perfil.estado !== "activo") return location.replace("inicio.html");
+        if (perfil.es_admin) $("#opcion-completo").classList.remove("hidden");
+
+        const { data, error } = await sb.from("sorteos").select("*").eq("id", sorteoId).maybeSingle();
+        if (error) throw new Error(textoError(error));
+        if (!data) throw new Error("Ese sorteo no existe.");
+        sorteo = data;
+
+        pintarDatos();
+        const [, resguardos] = await Promise.all([pintarParticipantes(false), listarResguardos(sorteoId)]);
+        $("#acta-resguardos").innerHTML = htmlResguardos(resguardos);
+
+        $("#generado").textContent = fechaHora(new Date());
+        $("#cargando").classList.add("hidden");
+        $("#contenido").classList.remove("hidden");
+      } catch (err) {
+        $("#cargando").classList.add("hidden");
+        aviso(err.message, "error");
+      }
+    }
+
+    function pintarDatos() {
+      const s = sorteo;
+      const boteUsado = Number(s.coste) - Number(s.recaudado);
+      $("#acta-fecha").textContent = fecha(s.fecha);
+      $("#d-fecha").textContent = fecha(s.fecha);
+      $("#d-cierre").textContent = fechaHora(s.creado);
+      $("#d-participantes").textContent = s.participantes;
+      $("#d-recaudado").textContent = euro(s.recaudado);
+      $("#d-apuestas").textContent = `${s.apuestas} × ${euro(s.coste / (s.apuestas || 1))} = ${euro(s.coste)}`
+        + (boteUsado > 0 ? ` (${euro(boteUsado)} del bote)` : "");
+      $("#d-cuota").textContent = `1 / ${s.participantes} = ${(100 / s.participantes).toLocaleString("es-ES", { maximumFractionDigits: 4 })} %`;
+      $("#d-resultado").textContent = s.estado === "cerrado" ? "Pendiente de sorteo"
+        : !(s.premio > 0) ? "Sin premio"
+        : s.cobro_banco ? `${euro(s.premio)} · se cobra en el banco (${euro(s.premio_por_persona)} por participante)`
+        : `${euro(s.premio)} · ${euro(s.premio_por_persona)} sumados al saldo de cada participante`;
+      $("#acta-estado").textContent = s.estado === "finalizado" ? "Finalizado" : s.jugado ? `Jugado el ${fecha(s.jugado)}` : "Pendiente de jugar";
+    }
+
+    async function pintarParticipantes(completo) {
+      const lista = await rpc("acta_participantes", { p_sorteo: sorteoId, p_completo: completo });
+      $("#acta-participantes").innerHTML = lista.map((p, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(p.nombre)}</td>
+          <td class="mono">${escapeHtml(p.dni || "—")}</td>
+          <td>${euro(p.importe)}</td>
+          <td>${Number(p.porcentaje).toLocaleString("es-ES", { maximumFractionDigits: 4 })} %</td>
+        </tr>`).join("") || `<tr><td colspan="5" class="vacio">Sin participantes.</td></tr>`;
+    }
+
+    $("#imprimir").addEventListener("click", () => window.print());
+    $("#dni-completo").addEventListener("change", async (e) => {
+      try {
+        await pintarParticipantes(e.target.checked);
+      } catch (err) {
+        aviso(err.message, "error");
+      }
+    });
+
+    iniciar();
+  </script>
+</body>
+</html>

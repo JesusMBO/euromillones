@@ -313,6 +313,7 @@
         const s = sorteosCargados.find(x => String(x.id) === String(id));
         $("#detalle-titulo").textContent = `Sorteo del ${fecha(s?.fecha)}`;
         $("#detalle-cuerpo").innerHTML = `
+          <a class="btn btn-inline enlace-acta" href="acta.html?id=${encodeURIComponent(id)}">📄 Ver el acta del sorteo</a>
           <h3>Resguardo</h3>
           ${htmlResguardos(resguardos)}
           <h3>Participantes (${lista.length})</h3>

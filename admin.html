@@ -159,7 +159,10 @@
       if (abierto) {
         const jugado = !!abierto.jugado;
         $("#semana").innerHTML = `
-          <h2>Sorteo del ${fecha(abierto.fecha)}</h2>
+          <div class="section-head">
+            <h2>Sorteo del ${fecha(abierto.fecha)}</h2>
+            <a class="btn-ghost" href="acta.html?id=${abierto.id}">📄 Acta</a>
+          </div>
           <ol class="pasos">
             <li class="${jugado ? "hecho" : ""}">
               <div class="paso-titulo">Compra <b>${abierto.apuestas} apuestas automáticas</b> (${euro(abierto.coste)})</div>
