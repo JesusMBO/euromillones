@@ -107,7 +107,8 @@ function pintarTopbar(perfil, paginaActual) {
 
 // ---------- Resguardos (Storage: resguardos/<id del sorteo>/) ----------
 
-const URL_JUGAR = "https://www.loteriasyapuestas.es/es/euromillones";
+// Página oficial para hacer la apuesta (pide iniciar sesión en Loterías y Apuestas)
+const URL_JUGAR = "https://juegos.loteriasyapuestas.es/jugar/euromillones/apuesta?lang=es";
 
 async function listarResguardos(sorteoId) {
   const carpeta = sb.storage.from("resguardos");
