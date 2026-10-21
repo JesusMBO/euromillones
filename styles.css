@@ -450,6 +450,10 @@ input:focus, select:focus {
   font-size: 0.75rem;
   cursor: pointer;
 }
+.corregir { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.corregir summary { cursor: pointer; font-size: 0.88rem; font-weight: 600; color: var(--muted); }
+.corregir[open] summary { margin-bottom: 4px; }
+.corregir input[type="date"] { width: auto; }
 .loader.small { width: 22px; height: 22px; margin: 8px 0; border-width: 2.5px; }
 
 /* ---------- Ventanas, avisos y carga ---------- */

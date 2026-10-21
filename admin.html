@@ -102,7 +102,7 @@
         rpc("ver_bote"),
         sb.from("ajustes").select("*").single(),
         sb.from("avisos_pago").select("*").eq("estado", "pendiente").order("creado"),
-        sb.from("sorteos").select("*").eq("estado", "cerrado").maybeSingle()
+        sb.from("sorteos").select("*").order("id", { ascending: false }).limit(1).maybeSingle()
       ]);
       for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo]) if (r.error) throw new Error(textoError(r.error));
 
@@ -152,8 +152,10 @@
 
     // ---------- Sorteo de la semana ----------
 
-    function pintarSemana(abierto) {
+    // ultimo: el sorteo más reciente; si no tiene resultado, es el que está en curso
+    function pintarSemana(ultimo) {
       const precio = Number(ajustes.precio_apuesta);
+      const abierto = ultimo?.estado === "cerrado" ? ultimo : null;
       if (abierto) {
         const jugado = !!abierto.jugado;
         $("#semana").innerHTML = `
@@ -186,14 +188,28 @@
               </form>
             </li>
           </ol>
-          <button class="link danger hidden" id="anular" type="button">Anular este cierre (si te has equivocado)</button>`;
+          <details class="corregir">
+            <summary>Corregir este sorteo</summary>
+            <form id="form-fecha" class="fila-botones">
+              <input id="nueva-fecha" type="date" value="${abierto.fecha}" required aria-label="Nueva fecha">
+              <button class="btn-ghost" type="submit">Cambiar fecha</button>
+            </form>
+            ${jugado ? `
+              <div class="fila-botones">
+                <button class="btn-ghost" id="desmarcar" type="button">Deshacer «jugado»</button>
+                <span class="muted small">para quitar o cambiar el resguardo</span>
+              </div>` : ""}
+            <div class="fila-botones">
+              <button class="btn-ghost danger" id="anular" type="button">Anular el cierre</button>
+              <span class="muted small">devuelve ${euro(ajustes.cuota_semanal)} a cada participante y borra el resguardo</span>
+            </div>
+          </details>`;
 
+        let resguardos = [];
         const pintarResguardos = async () => {
           try {
-            const lista = await listarResguardos(abierto.id);
-            $("#lista-resguardos").innerHTML = htmlResguardos(lista, !jugado);
-            // Con resguardo subido las apuestas ya están compradas: no se puede anular
-            $("#anular").classList.toggle("hidden", jugado || lista.length > 0);
+            resguardos = await listarResguardos(abierto.id);
+            $("#lista-resguardos").innerHTML = htmlResguardos(resguardos, !jugado);
           } catch (err) {
             $("#lista-resguardos").innerHTML = "";
             aviso(err.message, "error");
@@ -241,13 +257,31 @@
         $("#form-resultado").addEventListener("submit", async (e) => {
           e.preventDefault();
           const premio = Number($("#premio").value);
-          if (!confirm(`¿Apuntar un premio de ${euro(premio)}? No se puede deshacer.`)) return;
+          if (!confirm(`¿Apuntar un premio de ${euro(premio)}?`)) return;
           await accion(e.target.querySelector(".btn"), () => rpc("registrar_resultado", { p_sorteo: abierto.id, p_premio: premio }), "Resultado apuntado.");
         });
 
+        $("#form-fecha").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const f = $("#nueva-fecha").value;
+          await accion(e.target.querySelector("button"), () => rpc("cambiar_fecha_sorteo", { p_sorteo: abierto.id, p_fecha: f }), `Fecha cambiada al ${fecha(f)}.`);
+        });
+
+        if (jugado) {
+          $("#desmarcar").addEventListener("click", async (e) => {
+            await accion(e.target, () => rpc("desmarcar_jugado", { p_sorteo: abierto.id }), "Ya puedes cambiar el resguardo.");
+          });
+        }
+
         $("#anular").addEventListener("click", async (e) => {
-          if (!confirm("¿Anular el cierre? Se devolverá la cuota a todos los participantes de este sorteo.")) return;
-          await accion(e.target, () => rpc("anular_sorteo", { p_sorteo: abierto.id }), "Cierre anulado.");
+          const aviso1 = resguardos.length
+            ? "Este sorteo ya tiene resguardo. Anúlalo SOLO si te equivocaste y NO has comprado las apuestas.\n\n"
+            : "";
+          if (!confirm(`${aviso1}¿Anular el cierre? Se devolverá la cuota a todos los participantes y se borrará el resguardo.`)) return;
+          const rutas = resguardos.map(r => r.ruta);
+          const ok = await accion(e.target, () => rpc("anular_sorteo", { p_sorteo: abierto.id }), "Cierre anulado.");
+          // El sorteo ya no existe: sus archivos sobran
+          if (ok && rutas.length) await sb.storage.from("resguardos").remove(rutas);
         });
         return;
       }
@@ -272,7 +306,16 @@
             <input id="fecha-sorteo" type="date" value="${hoyISO()}" required>
           </div>
           <button class="btn" type="submit" ${juegan ? "" : "disabled"}><span class="label">Cerrar semana</span></button>
-        </form>`;
+        </form>
+        ${ultimo ? `
+          <details class="corregir">
+            <summary>Corregir el último sorteo (${fecha(ultimo.fecha)})</summary>
+            <p class="muted small">Premio apuntado: <b>${euro(ultimo.premio)}</b>${ultimo.premio_por_persona ? ` (${euro(ultimo.premio_por_persona)} por persona)` : ultimo.premio > 0 ? " (al bote)" : ""}.</p>
+            <div class="fila-botones">
+              <button class="btn-ghost danger" id="deshacer-resultado" type="button">Deshacer el resultado</button>
+              <span class="muted small">vuelve a dejarlo pendiente para apuntar el premio bien</span>
+            </div>
+          </details>` : ""}`;
 
       $("#form-cerrar").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -280,6 +323,13 @@
         if (!confirm(`¿Cerrar la semana del sorteo del ${fecha(f)}? Se descontará ${euro(cuota)} a ${juegan} personas.`)) return;
         await accion(e.target.querySelector(".btn"), () => rpc("cerrar_semana", { p_fecha: f }), "Semana cerrada. ¡A comprar las apuestas!");
       });
+
+      if (ultimo) {
+        $("#deshacer-resultado").addEventListener("click", async (e) => {
+          if (!confirm(`¿Deshacer el resultado del sorteo del ${fecha(ultimo.fecha)}? Se quitará el premio de ${euro(ultimo.premio)} de los saldos o del bote.`)) return;
+          await accion(e.target, () => rpc("deshacer_resultado", { p_sorteo: ultimo.id }), "Resultado deshecho. Apúntalo de nuevo.");
+        });
+      }
     }
 
     // ---------- Movimiento manual ----------
