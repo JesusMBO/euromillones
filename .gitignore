@@ -1,0 +1,11 @@
+# Configuración local de la app de Claude
+.claude/
+
+# Variables de entorno y secretos (nunca subir)
+.env
+.env.*
+
+# Archivos del sistema
+Thumbs.db
+desktop.ini
+.DS_Store

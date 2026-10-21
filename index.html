@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EuromillonesCAIB · Entrar</title>
+  <meta name="theme-color" content="#1e3a8a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="auth">
+    <aside class="brand">
+      <div class="logo">
+        <span class="logo-mark">★</span>
+        <span>Euromillones<b>CAIB</b></span>
+      </div>
+      <div class="pitch">
+        <h2>La peña de los compañeros, sin Excel.</h2>
+        <p>Consulta tu saldo, el bote y todos los sorteos. Recarga con Bizum y juega cada semana sin que nadie te tenga que perseguir.</p>
+      </div>
+    </aside>
+
+    <main class="panel">
+      <div class="form-box">
+        <!-- Paso 1: email -->
+        <section id="paso-email">
+          <h1>Entrar</h1>
+          <p class="subtitle">Sin contraseñas: te enviamos un enlace a tu correo.</p>
+          <form id="form-email" novalidate>
+            <label for="email">Tu email</label>
+            <input id="email" type="email" autocomplete="email" placeholder="tu@email.com" required>
+            <button class="btn" type="submit"><span class="label">Enviarme el enlace</span></button>
+          </form>
+        </section>
+
+        <!-- Paso 2: revisar el correo -->
+        <section id="paso-codigo" class="hidden">
+          <h1>Revisa tu correo</h1>
+          <p class="subtitle">Hemos enviado un enlace a <b id="email-enviado"></b>. Púlsalo para entrar.</p>
+          <form id="form-codigo" novalidate>
+            <label for="codigo">¿Lo abres en otro dispositivo? Escribe el código del correo</label>
+            <input id="codigo" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="10">
+            <button class="btn" type="submit"><span class="label">Entrar con el código</span></button>
+          </form>
+          <button id="otro-email" class="link" type="button">Usar otro email</button>
+        </section>
+
+        <div id="msg" class="msg hidden" role="alert"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    if (!CONFIGURADO) avisoSinConfigurar();
+
+    const msgEl = $("#msg");
+    let email = "";
+
+    function mostrar(text, type) {
+      msgEl.textContent = text;
+      msgEl.className = "msg " + type;
+    }
+
+    function cargando(form, on) {
+      const btn = form.querySelector(".btn");
+      btn.disabled = on;
+      btn.classList.toggle("loading", on);
+    }
+
+    // Si ya hay sesión (o se vuelve desde el enlace del correo), ir al inicio
+    sb.auth.getSession().then(({ data }) => {
+      if (data.session) location.replace("inicio.html");
+    });
+
+    $("#form-email").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      email = $("#email").value.trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) return mostrar("Escribe un email válido.", "error");
+
+      cargando(e.target, true);
+      try {
+        // El enlace vuelve a inicio.html (debe estar en Authentication → URL Configuration → Redirect URLs)
+        const { error } = await sb.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: new URL("inicio.html", location.href).href }
+        });
+        if (error) {
+          const m = error.message.toLowerCase();
+          return mostrar(m.includes("rate limit") || m.includes("seconds")
+            ? "Se han enviado demasiados correos. Espera un minuto e inténtalo de nuevo."
+            : "No se pudo enviar el correo. Inténtalo de nuevo.", "error");
+        }
+        $("#email-enviado").textContent = email;
+        $("#paso-email").classList.add("hidden");
+        $("#paso-codigo").classList.remove("hidden");
+        msgEl.className = "msg hidden";
+      } catch {
+        mostrar("Error de conexión. Inténtalo de nuevo.", "error");
+      } finally {
+        cargando(e.target, false);
+      }
+    });
+
+    $("#form-codigo").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const token = $("#codigo").value.replace(/\s/g, "");
+      if (!token) return mostrar("Escribe el código que aparece en el correo.", "error");
+
+      cargando(e.target, true);
+      try {
+        const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+        if (error) return mostrar("Código incorrecto o caducado. Pide otro enlace.", "error");
+        location.replace("inicio.html");
+      } catch {
+        mostrar("Error de conexión. Inténtalo de nuevo.", "error");
+      } finally {
+        cargando(e.target, false);
+      }
+    });
+
+    $("#otro-email").addEventListener("click", () => {
+      $("#paso-codigo").classList.add("hidden");
+      $("#paso-email").classList.remove("hidden");
+      msgEl.className = "msg hidden";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EuromillonesCAIB</title>
+  <meta name="theme-color" content="#1e3a8a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+
+  <main class="dashboard">
+    <div id="cargando" class="loader" aria-label="Cargando"></div>
+
+    <!-- Primera vez: pedir el nombre -->
+    <section id="sin-nombre" class="card narrow hidden">
+      <h2>¿Cómo te llamas?</h2>
+      <p class="muted">Es el nombre que verán tus compañeros en la lista de saldos.</p>
+      <form id="form-nombre">
+        <input id="nombre" maxlength="60" placeholder="Nombre y apellido" autocomplete="name" required>
+        <button class="btn" type="submit"><span class="label">Guardar</span></button>
+      </form>
+    </section>
+
+    <!-- Cuenta aún no aprobada o dada de baja -->
+    <section id="no-activo" class="card narrow hidden">
+      <div class="status-icon">⏳</div>
+      <h2 id="no-activo-titulo"></h2>
+      <p class="muted" id="no-activo-texto"></p>
+    </section>
+
+    <div id="contenido" class="hidden">
+      <!-- Mi saldo -->
+      <section class="hero">
+        <div class="hero-label">Mi saldo</div>
+        <div class="hero-saldo" id="mi-saldo"></div>
+        <div class="hero-estado" id="mi-estado"></div>
+        <button class="btn btn-light" id="abrir-pago" type="button"><span class="label">📲 He hecho un Bizum</span></button>
+        <div id="mis-avisos"></div>
+      </section>
+
+      <!-- Resumen -->
+      <section class="cards">
+        <div class="card stat">
+          <div class="card-label">Bote acumulado</div>
+          <div class="card-value" id="bote"></div>
+          <div class="card-sub">Se reinvierte en apuestas extra</div>
+        </div>
+        <div class="card stat">
+          <div class="card-label">Participantes activos</div>
+          <div class="card-value" id="n-activos"></div>
+          <div class="card-sub" id="n-juegan"></div>
+        </div>
+        <div class="card stat">
+          <div class="card-label">Último sorteo</div>
+          <div class="card-value" id="ultimo-sorteo"></div>
+          <div class="card-sub" id="ultimo-sorteo-sub"></div>
+        </div>
+      </section>
+
+      <!-- Saldos de todos -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Saldos</h2>
+          <div class="filtros" role="group" aria-label="Filtrar">
+            <button class="chip active" data-filtro="todos" type="button">Todos</button>
+            <button class="chip" data-filtro="rojo" type="button">🔴 Sin saldo</button>
+          </div>
+        </div>
+        <input id="buscar" class="search" type="search" placeholder="Buscar compañero…">
+        <ul class="lista" id="lista-saldos"></ul>
+        <p class="muted small">🟢 3 semanas o más · 🟡 1 o 2 semanas · 🔴 no juega. Pulsa un nombre para ver su extracto.</p>
+      </section>
+
+      <!-- Sorteos -->
+      <section class="card">
+        <h2>Sorteos</h2>
+        <div class="tabla-wrap">
+          <table class="tabla">
+            <thead><tr><th>Fecha</th><th>Juegan</th><th>Apuestas</th><th>Premio</th></tr></thead>
+            <tbody id="tabla-sorteos"></tbody>
+          </table>
+        </div>
+        <p class="muted small">Pulsa un sorteo para ver quién jugaba.</p>
+      </section>
+
+      <!-- Mi extracto -->
+      <section class="card">
+        <h2>Mi extracto</h2>
+        <ul class="lista" id="mi-extracto"></ul>
+      </section>
+    </div>
+  </main>
+
+  <!-- Ventana: avisar de un pago -->
+  <dialog id="dlg-pago">
+    <form id="form-pago" method="dialog">
+      <h2>He hecho un Bizum</h2>
+      <p class="muted">Un administrador lo confirmará cuando lo vea en el banco y se sumará a tu saldo.</p>
+      <label for="pago-importe">Importe (€)</label>
+      <div class="importes">
+        <button type="button" class="chip" data-importe="10">10 €</button>
+        <button type="button" class="chip" data-importe="20">20 €</button>
+        <button type="button" class="chip" data-importe="50">50 €</button>
+      </div>
+      <input id="pago-importe" type="number" min="1" max="500" step="0.01" inputmode="decimal" required>
+      <label for="pago-nota">Nota (opcional)</label>
+      <input id="pago-nota" maxlength="100" placeholder="Ej.: Bizum a Jesús">
+      <div class="dlg-botones">
+        <button class="btn-ghost" value="cancel" formnovalidate type="submit">Cancelar</button>
+        <button class="btn btn-inline" id="enviar-pago" value="ok" type="submit"><span class="label">Avisar</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ventana: detalle (extracto de alguien o participantes de un sorteo) -->
+  <dialog id="dlg-detalle">
+    <div class="dlg-head">
+      <h2 id="detalle-titulo"></h2>
+      <button class="btn-ghost" type="button" onclick="this.closest('dialog').close()">Cerrar</button>
+    </div>
+    <div id="detalle-cuerpo"></div>
+  </dialog>
+
+  <script>
+    if (!CONFIGURADO) avisoSinConfigurar();
+
+    let perfil, ajustes, saldos = [], filtro = "todos";
+    const nombres = {};
+
+    const tipos = {
+      ingreso: "💶 Ingreso",
+      apuesta: "🎟️ Apuesta",
+      premio: "🏆 Premio",
+      retirada: "↩️ Retirada",
+      ajuste: "✏️ Ajuste"
+    };
+
+    function itemMovimiento(m) {
+      return `<li class="mov">
+        <div>
+          <div class="mov-tipo">${tipos[m.tipo] || m.tipo}</div>
+          <div class="muted small">${fecha(m.creado)}${m.nota ? " · " + escapeHtml(m.nota) : ""}</div>
+        </div>
+        <div class="importe ${m.importe > 0 ? "pos" : "neg"}">${m.importe > 0 ? "+" : ""}${euro(m.importe)}</div>
+      </li>`;
+    }
+
+    async function iniciar() {
+      try {
+        perfil = await cargarPerfil();
+        if (!perfil) return;
+        pintarTopbar(perfil, "inicio");
+
+        if (!perfil.nombre) return mostrarSeccion("sin-nombre");
+        if (perfil.estado !== "activo") {
+          $("#no-activo-titulo").textContent = perfil.estado === "pendiente" ? "Cuenta pendiente de aprobación" : "Estás dado de baja";
+          $("#no-activo-texto").textContent = perfil.estado === "pendiente"
+            ? "Un administrador tiene que aprobar tu cuenta. Cuando lo haga, podrás ver los saldos y empezar a jugar."
+            : "Si quieres volver a la peña, habla con un administrador.";
+          return mostrarSeccion("no-activo");
+        }
+        await cargarDatos();
+        mostrarSeccion("contenido");
+      } catch (err) {
+        $("#cargando").classList.add("hidden");
+        aviso(err.message, "error");
+      }
+    }
+
+    function mostrarSeccion(id) {
+      $("#cargando").classList.add("hidden");
+      ["sin-nombre", "no-activo", "contenido"].forEach(s => $("#" + s).classList.toggle("hidden", s !== id));
+    }
+
+    async function cargarDatos() {
+      const [rSaldos, bote, rAjustes, rSorteos, rMovs, rAvisos] = await Promise.all([
+        rpc("ver_saldos"),
+        rpc("ver_bote"),
+        sb.from("ajustes").select("*").single(),
+        sb.from("sorteos").select("*").order("fecha", { ascending: false }).limit(30),
+        sb.from("movimientos").select("*").eq("perfil_id", perfil.id).order("creado", { ascending: false }).limit(100),
+        sb.from("avisos_pago").select("*").eq("perfil_id", perfil.id).eq("estado", "pendiente").order("creado")
+      ]);
+      for (const r of [rAjustes, rSorteos, rMovs, rAvisos]) if (r.error) throw new Error(textoError(r.error));
+
+      ajustes = rAjustes.data;
+      saldos = rSaldos;
+      saldos.forEach(s => (nombres[s.id] = s.nombre));
+
+      // Mi saldo
+      const yo = saldos.find(s => s.id === perfil.id);
+      const miSaldo = Number(yo?.saldo || 0);
+      const cuota = Number(ajustes.cuota_semanal);
+      const semanas = Math.floor(miSaldo / cuota);
+      $("#mi-saldo").textContent = euro(miSaldo);
+      $("#mi-estado").innerHTML = semanas >= 1
+        ? `✅ Juegas el próximo sorteo · te llega para <b>${semanas} ${semanas === 1 ? "semana" : "semanas"}</b>`
+        : `⚠️ <b>Sin saldo:</b> no juegas el próximo sorteo. Haz un Bizum y avísalo aquí.`;
+      $("#mis-avisos").innerHTML = rAvisos.data.map(a =>
+        `<div class="pill-aviso">⏳ Bizum de ${euro(a.importe)} pendiente de confirmar</div>`).join("");
+
+      // Resumen
+      const activos = saldos.filter(s => s.estado === "activo");
+      $("#bote").textContent = euro(bote);
+      $("#n-activos").textContent = activos.length;
+      const juegan = activos.filter(s => Number(s.saldo) >= cuota).length;
+      $("#n-juegan").textContent = `${juegan} tienen saldo para el próximo`;
+
+      const ultimo = rSorteos.data[0];
+      $("#ultimo-sorteo").textContent = ultimo ? fecha(ultimo.fecha) : "—";
+      $("#ultimo-sorteo-sub").textContent = !ultimo ? "Aún no se ha jugado"
+        : ultimo.estado === "cerrado" ? `${ultimo.apuestas} apuestas · esperando resultado`
+        : ultimo.premio > 0 ? `Premio: ${euro(ultimo.premio)}` : "Sin premio";
+
+      pintarSaldos();
+      pintarSorteos(rSorteos.data);
+      $("#mi-extracto").innerHTML = rMovs.data.length
+        ? rMovs.data.map(itemMovimiento).join("")
+        : `<li class="vacio">Todavía no tienes movimientos.</li>`;
+    }
+
+    function pintarSaldos() {
+      const q = $("#buscar").value.trim().toLowerCase();
+      const cuota = Number(ajustes.cuota_semanal);
+      const lista = saldos
+        .filter(s => s.estado === "activo" || Number(s.saldo) !== 0)
+        .filter(s => !q || (s.nombre || "").toLowerCase().includes(q))
+        .filter(s => filtro !== "rojo" || (s.estado === "activo" && Number(s.saldo) < cuota));
+
+      $("#lista-saldos").innerHTML = lista.length ? lista.map(s => `
+        <li><button class="fila" type="button" data-id="${s.id}">
+          <span class="punto ${s.estado === "activo" ? colorSaldo(Number(s.saldo), cuota) : "gris"}"></span>
+          <span class="fila-nombre">${escapeHtml(s.nombre)}${s.id === perfil.id ? " <span class='tag'>tú</span>" : ""}${s.estado === "baja" ? " <span class='tag'>baja</span>" : ""}</span>
+          <span class="fila-saldo">${euro(s.saldo)}</span>
+        </button></li>`).join("")
+        : `<li class="vacio">Nadie coincide con la búsqueda.</li>`;
+    }
+
+    function pintarSorteos(sorteos) {
+      $("#tabla-sorteos").innerHTML = sorteos.length ? sorteos.map(s => `
+        <tr data-id="${s.id}" tabindex="0">
+          <td>${fecha(s.fecha)}</td>
+          <td>${s.participantes}</td>
+          <td>${s.apuestas}</td>
+          <td>${s.estado === "cerrado" ? "<span class='tag'>pendiente</span>"
+              : s.premio > 0 ? `<b>${euro(s.premio)}</b>${s.premio_por_persona ? `<div class="muted small">${euro(s.premio_por_persona)}/persona</div>` : `<div class="muted small">al bote</div>`}`
+              : "—"}</td>
+        </tr>`).join("")
+        : `<tr><td colspan="4" class="vacio">Aún no hay sorteos.</td></tr>`;
+    }
+
+    async function verExtracto(id) {
+      abrirDetalle(nombres[id] || "Extracto", `<div class="loader"></div>`);
+      const { data, error } = await sb.from("movimientos").select("*").eq("perfil_id", id).order("creado", { ascending: false }).limit(100);
+      if (error) return aviso(textoError(error), "error");
+      $("#detalle-cuerpo").innerHTML = `<ul class="lista">${data.length ? data.map(itemMovimiento).join("") : `<li class="vacio">Sin movimientos.</li>`}</ul>`;
+    }
+
+    async function verSorteo(id) {
+      abrirDetalle("Participantes", `<div class="loader"></div>`);
+      const { data, error } = await sb.from("participaciones").select("perfil_id, importe").eq("sorteo_id", id);
+      if (error) return aviso(textoError(error), "error");
+      const lista = data.map(p => nombres[p.perfil_id] || "—").sort((a, b) => a.localeCompare(b, "es"));
+      $("#detalle-titulo").textContent = `Participantes (${lista.length})`;
+      $("#detalle-cuerpo").innerHTML = `<ul class="lista compacta">${lista.map(n => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+    }
+
+    function abrirDetalle(titulo, html) {
+      $("#detalle-titulo").textContent = titulo;
+      $("#detalle-cuerpo").innerHTML = html;
+      $("#dlg-detalle").showModal();
+    }
+
+    // ---------- Eventos ----------
+
+    $("#form-nombre").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await rpc("guardar_nombre", { p_nombre: $("#nombre").value });
+        location.reload();
+      } catch (err) {
+        aviso(err.message, "error");
+      }
+    });
+
+    $("#buscar").addEventListener("input", pintarSaldos);
+    document.querySelectorAll("[data-filtro]").forEach(b => b.addEventListener("click", () => {
+      filtro = b.dataset.filtro;
+      document.querySelectorAll("[data-filtro]").forEach(x => x.classList.toggle("active", x === b));
+      pintarSaldos();
+    }));
+    $("#lista-saldos").addEventListener("click", (e) => {
+      const fila = e.target.closest(".fila");
+      if (fila) verExtracto(fila.dataset.id);
+    });
+    $("#tabla-sorteos").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-id]");
+      if (tr) verSorteo(tr.dataset.id);
+    });
+    $("#tabla-sorteos").addEventListener("keydown", (e) => {
+      const tr = e.target.closest("tr[data-id]");
+      if (tr && e.key === "Enter") verSorteo(tr.dataset.id);
+    });
+
+    $("#abrir-pago").addEventListener("click", () => {
+      $("#form-pago").reset();
+      $("#dlg-pago").showModal();
+    });
+    document.querySelectorAll("[data-importe]").forEach(b => b.addEventListener("click", () => {
+      $("#pago-importe").value = b.dataset.importe;
+    }));
+    $("#form-pago").addEventListener("submit", async (e) => {
+      if (e.submitter?.value !== "ok") return;
+      e.preventDefault();
+      const importe = Number($("#pago-importe").value);
+      if (!importe) return aviso("Indica el importe del Bizum.", "error");
+      try {
+        await rpc("avisar_pago", { p_importe: importe, p_nota: $("#pago-nota").value });
+        $("#dlg-pago").close();
+        aviso("¡Avisado! Se sumará a tu saldo cuando un administrador lo confirme.");
+        await cargarDatos();
+      } catch (err) {
+        aviso(err.message, "error");
+      }
+    });
+
+    iniciar();
+  </script>
+</body>
+</html>

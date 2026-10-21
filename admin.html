@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EuromillonesCAIB · Administrar</title>
+  <meta name="theme-color" content="#1e3a8a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+
+  <main class="dashboard">
+    <div id="cargando" class="loader" aria-label="Cargando"></div>
+
+    <div id="contenido" class="hidden">
+      <h1 class="page-title">Administrar</h1>
+
+      <!-- Pagos avisados -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Bizums por confirmar</h2>
+          <span class="tag" id="n-avisos"></span>
+        </div>
+        <p class="muted small">Confírmalos solo cuando veas el dinero en el banco.</p>
+        <ul class="lista" id="lista-avisos"></ul>
+      </section>
+
+      <!-- Sorteo de la semana -->
+      <section class="card" id="semana"></section>
+
+      <!-- Movimiento manual -->
+      <section class="card">
+        <h2>Apuntar movimiento</h2>
+        <p class="muted small">Para pagos en efectivo, devolver dinero a alguien o corregir un error.</p>
+        <form id="form-mov" class="form-grid">
+          <div>
+            <label for="mov-perfil">Participante</label>
+            <select id="mov-perfil" required></select>
+          </div>
+          <div>
+            <label for="mov-tipo">Tipo</label>
+            <select id="mov-tipo">
+              <option value="ingreso">💶 Ingreso (suma)</option>
+              <option value="retirada">↩️ Retirada (resta)</option>
+              <option value="ajuste">✏️ Ajuste (+ o −)</option>
+            </select>
+          </div>
+          <div>
+            <label for="mov-importe">Importe (€)</label>
+            <input id="mov-importe" type="number" step="0.01" inputmode="decimal" required>
+          </div>
+          <div>
+            <label for="mov-nota">Nota</label>
+            <input id="mov-nota" maxlength="100" placeholder="Ej.: efectivo en mano">
+          </div>
+          <button class="btn" type="submit"><span class="label">Apuntar</span></button>
+        </form>
+      </section>
+
+      <!-- Participantes -->
+      <section class="card">
+        <div class="section-head">
+          <h2>Participantes</h2>
+          <span class="tag" id="n-pendientes"></span>
+        </div>
+        <ul class="lista" id="lista-perfiles"></ul>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    if (!CONFIGURADO) avisoSinConfigurar();
+
+    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0;
+
+    async function iniciar() {
+      try {
+        perfil = await cargarPerfil();
+        if (!perfil) return;
+        if (!perfil.es_admin || perfil.estado !== "activo") return location.replace("inicio.html");
+        pintarTopbar(perfil, "admin");
+        await cargarDatos();
+        $("#cargando").classList.add("hidden");
+        $("#contenido").classList.remove("hidden");
+      } catch (err) {
+        $("#cargando").classList.add("hidden");
+        aviso(err.message, "error");
+      }
+    }
+
+    async function cargarDatos() {
+      const [rPerfiles, rSaldos, rBote, rAjustes, rAvisos, rSorteo] = await Promise.all([
+        sb.from("perfiles").select("*").order("nombre"),
+        rpc("ver_saldos"),
+        rpc("ver_bote"),
+        sb.from("ajustes").select("*").single(),
+        sb.from("avisos_pago").select("*").eq("estado", "pendiente").order("creado"),
+        sb.from("sorteos").select("*").eq("estado", "cerrado").maybeSingle()
+      ]);
+      for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo]) if (r.error) throw new Error(textoError(r.error));
+
+      perfiles = rPerfiles.data;
+      ajustes = rAjustes.data;
+      bote = Number(rBote);
+      saldos = {};
+      rSaldos.forEach(s => (saldos[s.id] = Number(s.saldo)));
+
+      pintarAvisos(rAvisos.data);
+      pintarSemana(rSorteo.data);
+      pintarPerfiles();
+    }
+
+    const nombreDe = id => {
+      const p = perfiles.find(x => x.id === id);
+      return p?.nombre || p?.email || "—";
+    };
+
+    // ---------- Bizums ----------
+
+    function pintarAvisos(avisos) {
+      $("#n-avisos").textContent = avisos.length ? `${avisos.length} pendientes` : "Al día";
+      $("#lista-avisos").innerHTML = avisos.length ? avisos.map(a => `
+        <li class="mov">
+          <div>
+            <div class="mov-tipo">${escapeHtml(nombreDe(a.perfil_id))} · <b>${euro(a.importe)}</b></div>
+            <div class="muted small">${fecha(a.creado)}${a.nota ? " · " + escapeHtml(a.nota) : ""}</div>
+          </div>
+          <div class="acciones">
+            <button class="btn-ghost ok" data-confirmar="${a.id}" type="button">✅ Confirmar</button>
+            <button class="btn-ghost danger" data-rechazar="${a.id}" type="button">✕</button>
+          </div>
+        </li>`).join("")
+        : `<li class="vacio">No hay pagos pendientes.</li>`;
+    }
+
+    $("#lista-avisos").addEventListener("click", async (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.rechazar && !confirm("¿Rechazar este aviso? No se sumará al saldo.")) return;
+      await accion(b, b.dataset.confirmar
+        ? () => rpc("confirmar_aviso", { p_aviso: Number(b.dataset.confirmar) })
+        : () => rpc("rechazar_aviso", { p_aviso: Number(b.dataset.rechazar) }),
+        b.dataset.confirmar ? "Pago confirmado y sumado al saldo." : "Aviso rechazado.");
+    });
+
+    // ---------- Sorteo de la semana ----------
+
+    function pintarSemana(abierto) {
+      const precio = Number(ajustes.precio_apuesta);
+      if (abierto) {
+        $("#semana").innerHTML = `
+          <h2>Sorteo del ${fecha(abierto.fecha)}</h2>
+          <div class="destacado">
+            Compra <b>${abierto.apuestas} apuestas automáticas</b> (${euro(abierto.coste)})
+            <div class="muted small">${abierto.participantes} participantes · ${euro(abierto.recaudado)} recaudados · bote antes: ${euro(abierto.bote_antes)}</div>
+          </div>
+          <form id="form-resultado" class="form-grid">
+            <div>
+              <label for="premio">Premio total obtenido (€)</label>
+              <input id="premio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0 si no ha tocado nada" required>
+            </div>
+            <p class="muted small" id="previa-premio"></p>
+            <button class="btn" type="submit"><span class="label">Apuntar resultado</span></button>
+          </form>
+          <button class="link danger" id="anular" type="button">Anular este cierre (si te has equivocado)</button>`;
+
+        const previa = () => {
+          const premio = Number($("#premio").value) || 0;
+          const porPersona = Math.floor(premio * 100 / abierto.participantes) / 100;
+          $("#previa-premio").textContent = premio <= 0 ? "Sin premio: no cambia nada."
+            : porPersona >= Number(ajustes.umbral_reparto)
+              ? `Sale a ${euro(porPersona)} por persona → se REPARTE entre los ${abierto.participantes} participantes.`
+              : `Sale a ${euro(porPersona)} por persona (menos de ${euro(ajustes.umbral_reparto)}) → va al BOTE.`;
+        };
+        $("#premio").addEventListener("input", previa);
+
+        $("#form-resultado").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const premio = Number($("#premio").value);
+          if (!confirm(`¿Apuntar un premio de ${euro(premio)}? No se puede deshacer.`)) return;
+          await accion(e.target.querySelector(".btn"), () => rpc("registrar_resultado", { p_sorteo: abierto.id, p_premio: premio }), "Resultado apuntado.");
+        });
+
+        $("#anular").addEventListener("click", async (e) => {
+          if (!confirm("¿Anular el cierre? Se devolverá la cuota a todos los participantes de este sorteo.")) return;
+          await accion(e.target, () => rpc("anular_sorteo", { p_sorteo: abierto.id }), "Cierre anulado.");
+        });
+        return;
+      }
+
+      // No hay sorteo abierto: previsión del próximo cierre
+      const cuota = Number(ajustes.cuota_semanal);
+      const juegan = perfiles.filter(p => p.estado === "activo" && (saldos[p.id] || 0) >= cuota).length;
+      const recaudado = juegan * cuota;
+      const apuestas = Math.floor((recaudado + bote) / precio);
+      const boteDespues = recaudado + bote - apuestas * precio;
+
+      $("#semana").innerHTML = `
+        <h2>Cerrar la semana</h2>
+        <p class="muted small">Cobra ${euro(cuota)} a cada participante con saldo y calcula cuántas apuestas comprar.</p>
+        <div class="destacado">
+          Jugarían <b>${juegan} personas</b> → <b>${apuestas} apuestas</b> (${euro(apuestas * precio)})
+          <div class="muted small">Recaudado ${euro(recaudado)} + bote ${euro(bote)} · el bote quedaría en ${euro(boteDespues)}</div>
+        </div>
+        <form id="form-cerrar" class="form-grid">
+          <div>
+            <label for="fecha-sorteo">Fecha del sorteo</label>
+            <input id="fecha-sorteo" type="date" value="${hoyISO()}" required>
+          </div>
+          <button class="btn" type="submit" ${juegan ? "" : "disabled"}><span class="label">Cerrar semana</span></button>
+        </form>`;
+
+      $("#form-cerrar").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = $("#fecha-sorteo").value;
+        if (!confirm(`¿Cerrar la semana del sorteo del ${fecha(f)}? Se descontará ${euro(cuota)} a ${juegan} personas.`)) return;
+        await accion(e.target.querySelector(".btn"), () => rpc("cerrar_semana", { p_fecha: f }), "Semana cerrada. ¡A comprar las apuestas!");
+      });
+    }
+
+    // ---------- Movimiento manual ----------
+
+    $("#form-mov").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const params = {
+        p_perfil: $("#mov-perfil").value,
+        p_tipo: $("#mov-tipo").value,
+        p_importe: Number($("#mov-importe").value),
+        p_nota: $("#mov-nota").value
+      };
+      const ok = await accion(e.target.querySelector(".btn"), () => rpc("registrar_movimiento", params), "Movimiento apuntado.");
+      if (ok) e.target.reset();
+    });
+
+    // ---------- Participantes ----------
+
+    function pintarPerfiles() {
+      const orden = { pendiente: 0, activo: 1, baja: 2 };
+      const lista = [...perfiles].sort((a, b) => orden[a.estado] - orden[b.estado] || (a.nombre || a.email).localeCompare(b.nombre || b.email, "es"));
+      const pendientes = perfiles.filter(p => p.estado === "pendiente").length;
+      $("#n-pendientes").textContent = pendientes ? `${pendientes} por aprobar` : `${perfiles.filter(p => p.estado === "activo").length} activos`;
+
+      $("#lista-perfiles").innerHTML = lista.map(p => {
+        const botones = p.id === perfil.id ? `<span class="tag">tú</span>`
+          : p.estado === "pendiente" ? `<button class="btn-ghost ok" data-estado="activo" data-id="${p.id}" type="button">Aprobar</button>`
+          : p.estado === "activo" ? `
+              <button class="btn-ghost" data-admin="${!p.es_admin}" data-id="${p.id}" type="button">${p.es_admin ? "Quitar admin" : "Hacer admin"}</button>
+              <button class="btn-ghost danger" data-estado="baja" data-id="${p.id}" type="button">Baja</button>`
+          : `<button class="btn-ghost" data-estado="activo" data-id="${p.id}" type="button">Reactivar</button>`;
+        return `<li class="mov">
+          <div>
+            <div class="mov-tipo">${escapeHtml(p.nombre || "(sin nombre)")} ${p.es_admin ? "<span class='tag'>admin</span>" : ""} ${p.estado !== "activo" ? `<span class="tag">${p.estado}</span>` : ""}</div>
+            <div class="muted small">${escapeHtml(p.email)}${p.estado !== "pendiente" ? " · saldo " + euro(saldos[p.id] || 0) : ""}</div>
+          </div>
+          <div class="acciones">${botones}</div>
+        </li>`;
+      }).join("");
+
+      $("#mov-perfil").innerHTML = perfiles
+        .filter(p => p.estado !== "pendiente")
+        .map(p => `<option value="${p.id}">${escapeHtml(p.nombre || p.email)}</option>`).join("");
+    }
+
+    $("#lista-perfiles").addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-id]");
+      if (!b) return;
+      if (b.dataset.estado === "baja" && !confirm(`¿Dar de baja a ${nombreDe(b.dataset.id)}? Dejará de jugar; su saldo se mantiene.`)) return;
+      await accion(b, b.dataset.estado
+        ? () => rpc("cambiar_estado", { p_perfil: b.dataset.id, p_estado: b.dataset.estado })
+        : () => rpc("cambiar_admin", { p_perfil: b.dataset.id, p_admin: b.dataset.admin === "true" }),
+        "Hecho.");
+    });
+
+    // Ejecuta una acción, muestra el resultado y recarga los datos
+    async function accion(boton, fn, textoOk) {
+      boton.disabled = true;
+      boton.classList.add("loading");
+      try {
+        await fn();
+        aviso(textoOk);
+        await cargarDatos();
+        return true;
+      } catch (err) {
+        aviso(err.message, "error");
+        return false;
+      } finally {
+        boton.disabled = false;
+        boton.classList.remove("loading");
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>
