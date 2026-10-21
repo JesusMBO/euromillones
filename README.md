@@ -6,6 +6,7 @@ Web para gestionar la peña de Euromillones de los compañeros: cada uno ve su s
 
 - Cada participante recarga saldo con **Bizum** y lo avisa en la web («He hecho un Bizum»). Un administrador lo confirma al verlo en el banco.
 - Cada semana un administrador pulsa **Cerrar semana**: se descuenta **1 €** a quien tenga saldo y la web dice cuántas apuestas automáticas comprar (a 2,50 €). Quien no tiene saldo no juega.
+- El administrador compra las apuestas en Loterías y Apuestas (botón **Jugar**), **sube el resguardo** (captura, foto o PDF) y marca el sorteo como **jugado**. Todos pueden ver el resguardo. Con el resguardo subido ya no se puede anular el cierre.
 - Lo que sobra va al **bote**, que paga apuestas extra otras semanas.
 - Al apuntar el premio: si sale a **50 € o más por persona** se reparte entre quienes jugaron; si no, va al bote.
 - Todos los miembros ven los saldos y movimientos de todos (transparencia). El email de cada uno solo lo ven los administradores.
@@ -23,12 +24,13 @@ Los importes (1 €, 2,50 € y 50 €) están en la tabla `ajustes` de Supabase
 | `app.js` | Funciones comunes |
 | `config.js` | Dirección y clave pública de Supabase |
 | `supabase/sql/01_esquema.sql` | Base de datos, reglas de seguridad y toda la lógica del dinero |
+| `supabase/sql/02_resguardos.sql` | Carpeta de resguardos y marcar sorteos como jugados |
 
 ## Puesta en marcha (una sola vez)
 
 ### 1. Supabase
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (región Europa).
-2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**.
+2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, en otra consulta nueva, con `supabase/sql/02_resguardos.sql`.
 3. **Project Settings → API**: copia la *Project URL* y la clave *publishable / anon* en `config.js`. **Nunca** la clave `service_role` / `secret`.
 
 ### 2. Login por email

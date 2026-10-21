@@ -155,21 +155,78 @@
     function pintarSemana(abierto) {
       const precio = Number(ajustes.precio_apuesta);
       if (abierto) {
+        const jugado = !!abierto.jugado;
         $("#semana").innerHTML = `
           <h2>Sorteo del ${fecha(abierto.fecha)}</h2>
-          <div class="destacado">
-            Compra <b>${abierto.apuestas} apuestas automáticas</b> (${euro(abierto.coste)})
-            <div class="muted small">${abierto.participantes} participantes · ${euro(abierto.recaudado)} recaudados · bote antes: ${euro(abierto.bote_antes)}</div>
-          </div>
-          <form id="form-resultado" class="form-grid">
-            <div>
-              <label for="premio">Premio total obtenido (€)</label>
-              <input id="premio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0 si no ha tocado nada" required>
-            </div>
-            <p class="muted small" id="previa-premio"></p>
-            <button class="btn" type="submit"><span class="label">Apuntar resultado</span></button>
-          </form>
-          <button class="link danger" id="anular" type="button">Anular este cierre (si te has equivocado)</button>`;
+          <ol class="pasos">
+            <li class="${jugado ? "hecho" : ""}">
+              <div class="paso-titulo">Compra <b>${abierto.apuestas} apuestas automáticas</b> (${euro(abierto.coste)})</div>
+              <div class="muted small">${abierto.participantes} participantes · ${euro(abierto.recaudado)} recaudados · bote antes: ${euro(abierto.bote_antes)}</div>
+              ${jugado ? "" : `<a class="btn btn-inline" href="${URL_JUGAR}" target="_blank" rel="noopener">🎟️ Jugar en Loterías y Apuestas</a>`}
+            </li>
+            <li class="${jugado ? "hecho" : ""}">
+              <div class="paso-titulo">${jugado ? `Jugado el ${fecha(abierto.jugado)}` : "Sube el resguardo (captura, foto o PDF)"}</div>
+              <div id="lista-resguardos"><div class="loader small"></div></div>
+              ${jugado ? "" : `
+                <div class="fila-botones">
+                  <label class="btn-ghost" for="subir-resguardo">📎 Subir resguardo</label>
+                  <input id="subir-resguardo" type="file" accept="image/*,application/pdf" multiple hidden>
+                  <button class="btn btn-inline" id="marcar-jugado" type="button"><span class="label">✅ Marcar como jugado</span></button>
+                </div>`}
+            </li>
+            <li>
+              <div class="paso-titulo">Después del sorteo, apunta el premio</div>
+              <form id="form-resultado" class="form-grid">
+                <div>
+                  <label for="premio">Premio total obtenido (€)</label>
+                  <input id="premio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0 si no ha tocado nada" required>
+                </div>
+                <p class="muted small" id="previa-premio"></p>
+                <button class="btn" type="submit"><span class="label">Apuntar resultado</span></button>
+              </form>
+            </li>
+          </ol>
+          <button class="link danger hidden" id="anular" type="button">Anular este cierre (si te has equivocado)</button>`;
+
+        const pintarResguardos = async () => {
+          try {
+            const lista = await listarResguardos(abierto.id);
+            $("#lista-resguardos").innerHTML = htmlResguardos(lista, !jugado);
+            // Con resguardo subido las apuestas ya están compradas: no se puede anular
+            $("#anular").classList.toggle("hidden", jugado || lista.length > 0);
+          } catch (err) {
+            $("#lista-resguardos").innerHTML = "";
+            aviso(err.message, "error");
+          }
+        };
+        pintarResguardos();
+
+        if (!jugado) {
+          $("#subir-resguardo").addEventListener("change", async (e) => {
+            if (!e.target.files.length) return;
+            $("#lista-resguardos").innerHTML = `<div class="loader small"></div>`;
+            try {
+              await subirResguardos(abierto.id, e.target.files);
+              aviso("Resguardo subido.");
+            } catch (err) {
+              aviso(err.message, "error");
+            }
+            e.target.value = "";
+            pintarResguardos();
+          });
+
+          $("#lista-resguardos").addEventListener("click", async (e) => {
+            const b = e.target.closest(".quitar");
+            if (!b || !confirm("¿Quitar este resguardo?")) return;
+            const { error } = await sb.storage.from("resguardos").remove([b.dataset.ruta]);
+            if (error) aviso(textoError(error), "error");
+            pintarResguardos();
+          });
+
+          $("#marcar-jugado").addEventListener("click", async (e) => {
+            await accion(e.currentTarget, () => rpc("marcar_jugado", { p_sorteo: abierto.id }), "Marcado como jugado. ¡Suerte!");
+          });
+        }
 
         const previa = () => {
           const premio = Number($("#premio").value) || 0;

@@ -88,7 +88,7 @@
             <tbody id="tabla-sorteos"></tbody>
           </table>
         </div>
-        <p class="muted small">Pulsa un sorteo para ver quién jugaba.</p>
+        <p class="muted small">Pulsa un sorteo para ver el resguardo y quién jugaba.</p>
       </section>
 
       <!-- Mi extracto -->
@@ -132,7 +132,7 @@
   <script>
     if (!CONFIGURADO) avisoSinConfigurar();
 
-    let perfil, ajustes, saldos = [], filtro = "todos";
+    let perfil, ajustes, saldos = [], sorteosCargados = [], filtro = "todos";
     const nombres = {};
 
     const tipos = {
@@ -217,7 +217,7 @@
       const ultimo = rSorteos.data[0];
       $("#ultimo-sorteo").textContent = ultimo ? fecha(ultimo.fecha) : "—";
       $("#ultimo-sorteo-sub").textContent = !ultimo ? "Aún no se ha jugado"
-        : ultimo.estado === "cerrado" ? `${ultimo.apuestas} apuestas · esperando resultado`
+        : ultimo.estado === "cerrado" ? `${ultimo.apuestas} apuestas · ${ultimo.jugado ? "jugado, esperando resultado" : "pendiente de jugar"}`
         : ultimo.premio > 0 ? `Premio: ${euro(ultimo.premio)}` : "Sin premio";
 
       pintarSaldos();
@@ -245,12 +245,13 @@
     }
 
     function pintarSorteos(sorteos) {
+      sorteosCargados = sorteos;
       $("#tabla-sorteos").innerHTML = sorteos.length ? sorteos.map(s => `
         <tr data-id="${s.id}" tabindex="0">
           <td>${fecha(s.fecha)}</td>
           <td>${s.participantes}</td>
           <td>${s.apuestas}</td>
-          <td>${s.estado === "cerrado" ? "<span class='tag'>pendiente</span>"
+          <td>${s.estado === "cerrado" ? `<span class='tag'>${s.jugado ? "🧾 jugado" : "pendiente"}</span>`
               : s.premio > 0 ? `<b>${euro(s.premio)}</b>${s.premio_por_persona ? `<div class="muted small">${euro(s.premio_por_persona)}/persona</div>` : `<div class="muted small">al bote</div>`}`
               : "—"}</td>
         </tr>`).join("")
@@ -265,12 +266,24 @@
     }
 
     async function verSorteo(id) {
-      abrirDetalle("Participantes", `<div class="loader"></div>`);
-      const { data, error } = await sb.from("participaciones").select("perfil_id, importe").eq("sorteo_id", id);
-      if (error) return aviso(textoError(error), "error");
-      const lista = data.map(p => nombres[p.perfil_id] || "—").sort((a, b) => a.localeCompare(b, "es"));
-      $("#detalle-titulo").textContent = `Participantes (${lista.length})`;
-      $("#detalle-cuerpo").innerHTML = `<ul class="lista compacta">${lista.map(n => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+      abrirDetalle("Sorteo", `<div class="loader"></div>`);
+      try {
+        const [rPart, resguardos] = await Promise.all([
+          sb.from("participaciones").select("perfil_id, importe").eq("sorteo_id", id),
+          listarResguardos(id)
+        ]);
+        if (rPart.error) throw new Error(textoError(rPart.error));
+        const lista = rPart.data.map(p => nombres[p.perfil_id] || "—").sort((a, b) => a.localeCompare(b, "es"));
+        const s = sorteosCargados.find(x => String(x.id) === String(id));
+        $("#detalle-titulo").textContent = `Sorteo del ${fecha(s?.fecha)}`;
+        $("#detalle-cuerpo").innerHTML = `
+          <h3>Resguardo</h3>
+          ${htmlResguardos(resguardos)}
+          <h3>Participantes (${lista.length})</h3>
+          <ul class="lista compacta">${lista.map(n => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+      } catch (err) {
+        aviso(err.message, "error");
+      }
     }
 
     function abrirDetalle(titulo, html) {

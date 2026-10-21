@@ -397,6 +397,61 @@ input:focus, select:focus {
 .tabla tbody tr[data-id] { cursor: pointer; }
 .tabla tbody tr[data-id]:hover { background: var(--surface-2); }
 
+/* ---------- Pasos del sorteo y resguardos ---------- */
+
+.pasos { list-style: none; counter-reset: paso; margin: 12px 0 0; padding: 0; display: grid; gap: 18px; }
+.pasos > li { position: relative; padding-left: 40px; counter-increment: paso; }
+.pasos > li::before {
+  content: counter(paso);
+  position: absolute;
+  left: 0;
+  top: -2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.pasos > li.hecho::before { content: "✓"; color: #fff; background: var(--verde); }
+.paso-titulo { margin-bottom: 4px; }
+.pasos .btn-inline { display: inline-block; margin-top: 10px; text-decoration: none; }
+.fila-botones { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+.fila-botones .btn-inline { margin-top: 0; }
+
+.resguardos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.resguardo { position: relative; }
+.resguardo img, .resguardo .pdf {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+.resguardo .quitar {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--neg);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.loader.small { width: 22px; height: 22px; margin: 8px 0; border-width: 2.5px; }
+
 /* ---------- Ventanas, avisos y carga ---------- */
 
 dialog {
@@ -411,6 +466,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(5, 10, 25, 0.5); }
 dialog h2 { margin: 0; }
+dialog h3 { margin: 18px 0 4px; font-size: 0.95rem; }
 .dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .dlg-botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .importes { margin-bottom: 8px; }
