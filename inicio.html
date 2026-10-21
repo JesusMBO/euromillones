@@ -226,9 +226,14 @@
       const cuota = Number(ajustes.cuota_semanal);
       const semanas = Math.floor(miSaldo / cuota);
       $("#mi-saldo").textContent = euro(miSaldo);
+      const cierre = proximoCierre();
+      const viernes = new Date(cierre);
+      viernes.setDate(viernes.getDate() + 1);
       $("#mi-estado").innerHTML = semanas >= 1
-        ? `✅ Juegas el próximo sorteo · te llega para <b>${semanas} ${semanas === 1 ? "semana" : "semanas"}</b>`
-        : `⚠️ <b>Sin saldo:</b> no juegas el próximo sorteo. Haz un Bizum y avísalo aquí.`;
+        ? `✅ Juegas el sorteo del <b>${diaMes(viernes)}</b> · te llega para <b>${semanas} ${semanas === 1 ? "semana" : "semanas"}</b>`
+        : `⚠️ <b>Sin saldo:</b> no juegas el sorteo del ${diaMes(viernes)}. Haz un Bizum y avísalo aquí.`;
+      $("#mi-estado").insertAdjacentHTML("beforeend",
+        `<div class="hero-cierre">🔒 La lista se cierra el <b>${diaMes(cierre)} a las 00:00</b>. Los Bizums tienen que estar confirmados antes.</div>`);
       $("#mis-avisos").innerHTML = rAvisos.data.map(a =>
         `<div class="pill-aviso">⏳ Bizum de ${euro(a.importe)} pendiente de confirmar</div>`).join("");
 

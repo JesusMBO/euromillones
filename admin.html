@@ -78,7 +78,7 @@
   <script>
     if (!CONFIGURADO) avisoSinConfigurar();
 
-    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0;
+    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0, ultimoCierre = null;
 
     async function iniciar() {
       try {
@@ -96,15 +96,17 @@
     }
 
     async function cargarDatos() {
-      const [rPerfiles, rSaldos, rBote, rAjustes, rAvisos, rSorteo] = await Promise.all([
+      const [rPerfiles, rSaldos, rBote, rAjustes, rAvisos, rSorteo, rCierre] = await Promise.all([
         sb.from("perfiles").select("*").order("nombre"),
         rpc("ver_saldos"),
         rpc("ver_bote"),
         sb.from("ajustes").select("*").single(),
         sb.from("avisos_pago").select("*").eq("estado", "pendiente").order("creado"),
-        sb.from("sorteos").select("*").order("id", { ascending: false }).limit(1).maybeSingle()
+        sb.from("sorteos").select("*").order("id", { ascending: false }).limit(1).maybeSingle(),
+        sb.from("cierres").select("*").order("id", { ascending: false }).limit(1).maybeSingle()
       ]);
-      for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo]) if (r.error) throw new Error(textoError(r.error));
+      for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo, rCierre]) if (r.error) throw new Error(textoError(r.error));
+      ultimoCierre = rCierre.data;
 
       perfiles = rPerfiles.data;
       ajustes = rAjustes.data;
@@ -291,27 +293,45 @@
         return;
       }
 
-      // No hay sorteo abierto: previsión del próximo cierre
+      // No hay sorteo abierto: previsión del próximo cierre automático
       const cuota = Number(ajustes.cuota_semanal);
-      const juegan = perfiles.filter(p => p.estado === "activo" && (saldos[p.id] || 0) >= cuota).length;
+      const sinDni = perfiles.filter(p => p.estado === "activo" && !(p.dni && p.acepta_normas));
+      const juegan = perfiles.filter(p => p.estado === "activo" && p.dni && p.acepta_normas && (saldos[p.id] || 0) >= cuota).length;
       const recaudado = juegan * cuota;
       const apuestas = Math.floor((recaudado + bote) / precio);
       const boteDespues = recaudado + bote - apuestas * precio;
+      const cierre = proximoCierre();
+      const viernes = new Date(cierre);
+      viernes.setDate(viernes.getDate() + 1);
+      const fallo = ultimoCierre && !ultimoCierre.ok;
 
       $("#semana").innerHTML = `
-        <h2>Cerrar la semana</h2>
-        <p class="muted small">Cobra ${euro(cuota)} a cada participante con saldo y calcula cuántas apuestas comprar.</p>
+        <h2>Próximo cierre</h2>
+        ${fallo ? `
+          <div class="msg error">
+            <b>⚠️ El cierre automático del ${fechaHora(ultimoCierre.ejecutado)} no se ha podido hacer:</b>
+            ${escapeHtml(ultimoCierre.mensaje)}.
+            Arréglalo y cierra a mano con el botón de abajo.
+          </div>` : ""}
+        <p>La lista se cierra sola el <b>${diaMes(cierre)} a las 00:00</b> para el sorteo del <b>${diaMes(viernes)}</b>.</p>
         <div class="destacado">
-          Jugarían <b>${juegan} personas</b> → <b>${apuestas} apuestas</b> (${euro(apuestas * precio)})
+          Si cerrara ahora jugarían <b>${juegan} personas</b> → <b>${apuestas} apuestas</b> (${euro(apuestas * precio)})
           <div class="muted small">Recaudado ${euro(recaudado)} + bote ${euro(bote)} · el bote quedaría en ${euro(boteDespues)}</div>
+          ${apuestas === 0 ? `<div class="falta small">Así no llega para ninguna apuesta: no se cobraría a nadie.</div>` : ""}
+          ${sinDni.length ? `<div class="falta small">${sinDni.length} activo(s) sin DNI o sin aceptar las normas no jugarán.</div>` : ""}
         </div>
-        <form id="form-cerrar" class="form-grid">
-          <div>
-            <label for="fecha-sorteo">Fecha del sorteo</label>
-            <input id="fecha-sorteo" type="date" value="${hoyISO()}" required>
-          </div>
-          <button class="btn" type="submit" ${juegan ? "" : "disabled"}><span class="label">Cerrar semana</span></button>
-        </form>
+        ${!fallo && ultimoCierre ? `<p class="muted small">Último cierre: ${escapeHtml(ultimoCierre.mensaje)} (${fechaHora(ultimoCierre.ejecutado)}).</p>` : ""}
+        <details class="corregir" ${fallo ? "open" : ""}>
+          <summary>Cerrar a mano</summary>
+          <p class="muted small">Solo si el cierre automático ha fallado. Cobra ${euro(cuota)} a cada participante con saldo, igual que el automático.</p>
+          <form id="form-cerrar" class="form-grid">
+            <div>
+              <label for="fecha-sorteo">Fecha del sorteo</label>
+              <input id="fecha-sorteo" type="date" value="${isoLocal(fallo && ultimoCierre.fecha_sorteo ? ultimoCierre.fecha_sorteo + "T00:00:00" : viernes)}" required>
+            </div>
+            <button class="btn" type="submit" ${apuestas ? "" : "disabled"}><span class="label">Cerrar ahora</span></button>
+          </form>
+        </details>
         ${ultimo ? `
           <details class="corregir">
             <summary>Corregir el último sorteo (${fecha(ultimo.fecha)})</summary>

@@ -28,6 +28,24 @@ function fechaHora(d) {
   return new Date(d).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Próximo jueves a las 00:00 (cierre de la lista del sorteo del viernes)
+function proximoCierre(ahora = new Date()) {
+  const d = new Date(ahora);
+  d.setHours(0, 0, 0, 0);
+  do d.setDate(d.getDate() + 1); while (d.getDay() !== 4);
+  return d;
+}
+
+function diaMes(d) {
+  return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "numeric" });
+}
+
+function isoLocal(d) {
+  const x = new Date(d);
+  x.setMinutes(x.getMinutes() - x.getTimezoneOffset());
+  return x.toISOString().slice(0, 10);
+}
+
 function hoyISO() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
