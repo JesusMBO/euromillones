@@ -108,9 +108,27 @@
         <ul class="lista" id="mi-extracto"></ul>
       </section>
 
-      <p class="muted small centro"><a href="normas.html">📜 Normas de la peña</a></p>
+      <p class="muted small centro">
+        <a href="normas.html">📜 Normas de la peña</a>
+        · <button class="link danger" id="abrir-baja" type="button">Darme de baja</button>
+      </p>
     </div>
   </main>
+
+  <!-- Ventana: pedir la baja -->
+  <dialog id="dlg-baja">
+    <form id="form-baja" method="dialog">
+      <h2>Darme de baja</h2>
+      <p>Dejarás de jugar desde el próximo cierre. Un administrador te devolverá tu saldo de <b id="baja-saldo"></b> por Bizum o transferencia y tramitará la baja.</p>
+      <p class="muted small">Si ya estás en un sorteo cerrado, sigues participando en él.</p>
+      <label for="baja-nota">¿Dónde te devolvemos el dinero? (opcional)</label>
+      <input id="baja-nota" maxlength="140" placeholder="Ej.: Bizum al 600 000 000">
+      <div class="dlg-botones">
+        <button class="btn-ghost" value="cancel" formnovalidate type="submit">Cancelar</button>
+        <button class="btn btn-inline btn-peligro" value="ok" type="submit"><span class="label">Pedir la baja</span></button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Ventana: avisar de un pago -->
   <dialog id="dlg-pago">
@@ -145,7 +163,7 @@
   <script>
     if (!CONFIGURADO) avisoSinConfigurar();
 
-    let perfil, ajustes, saldos = [], sorteosCargados = [], filtro = "todos";
+    let perfil, ajustes, saldos = [], sorteosCargados = [], filtro = "todos", bajaPedida = null;
     const nombres = {};
 
     const tipos = {
@@ -206,15 +224,17 @@
     }
 
     async function cargarDatos() {
-      const [rSaldos, bote, rAjustes, rSorteos, rMovs, rAvisos] = await Promise.all([
+      const [rSaldos, bote, rAjustes, rSorteos, rMovs, rAvisos, rBaja] = await Promise.all([
         rpc("ver_saldos"),
         rpc("ver_bote"),
         sb.from("ajustes").select("*").single(),
         sb.from("sorteos").select("*").order("fecha", { ascending: false }).limit(30),
         sb.from("movimientos").select("*").eq("perfil_id", perfil.id).order("creado", { ascending: false }).limit(100),
-        sb.from("avisos_pago").select("*").eq("perfil_id", perfil.id).eq("estado", "pendiente").order("creado")
+        sb.from("avisos_pago").select("*").eq("perfil_id", perfil.id).eq("estado", "pendiente").order("creado"),
+        sb.from("solicitudes_baja").select("*").eq("perfil_id", perfil.id).eq("estado", "pendiente").maybeSingle()
       ]);
-      for (const r of [rAjustes, rSorteos, rMovs, rAvisos]) if (r.error) throw new Error(textoError(r.error));
+      for (const r of [rAjustes, rSorteos, rMovs, rAvisos, rBaja]) if (r.error) throw new Error(textoError(r.error));
+      bajaPedida = rBaja.data;
 
       ajustes = rAjustes.data;
       saldos = rSaldos;
@@ -229,10 +249,15 @@
       const cierre = proximoCierre();
       const viernes = new Date(cierre);
       viernes.setDate(viernes.getDate() + 1);
-      $("#mi-estado").innerHTML = semanas >= 1
+      $("#baja-saldo").textContent = euro(miSaldo);
+      $("#abrir-baja").classList.toggle("hidden", !!bajaPedida);
+      $("#mi-estado").innerHTML = bajaPedida
+        ? `👋 <b>Has pedido la baja</b> el ${fecha(bajaPedida.creado)}. Ya no entras en los próximos sorteos; un administrador te devolverá ${euro(miSaldo)}.
+           <div><button class="link link-claro" id="cancelar-baja" type="button">Me lo he pensado: cancelar la baja</button></div>`
+        : semanas >= 1
         ? `✅ Juegas el sorteo del <b>${diaMes(viernes)}</b> · te llega para <b>${semanas} ${semanas === 1 ? "semana" : "semanas"}</b>`
         : `⚠️ <b>Sin saldo:</b> no juegas el sorteo del ${diaMes(viernes)}. Haz un Bizum y avísalo aquí.`;
-      $("#mi-estado").insertAdjacentHTML("beforeend",
+      if (!bajaPedida) $("#mi-estado").insertAdjacentHTML("beforeend",
         `<div class="hero-cierre">🔒 La lista se cierra el <b>${diaMes(cierre)} a las 00:00</b>. Los Bizums tienen que estar confirmados antes.</div>`);
       $("#mis-avisos").innerHTML = rAvisos.data.map(a =>
         `<div class="pill-aviso">⏳ Bizum de ${euro(a.importe)} pendiente de confirmar</div>`).join("");
@@ -367,6 +392,34 @@
     $("#tabla-sorteos").addEventListener("keydown", (e) => {
       const tr = e.target.closest("tr[data-id]");
       if (tr && e.key === "Enter") verSorteo(tr.dataset.id);
+    });
+
+    $("#abrir-baja").addEventListener("click", () => {
+      $("#form-baja").reset();
+      $("#dlg-baja").showModal();
+    });
+    $("#form-baja").addEventListener("submit", async (e) => {
+      if (e.submitter?.value !== "ok") return;
+      e.preventDefault();
+      try {
+        await rpc("pedir_baja", { p_nota: $("#baja-nota").value });
+        $("#dlg-baja").close();
+        aviso("Baja pedida. Un administrador te devolverá el saldo.");
+        await cargarDatos();
+      } catch (err) {
+        aviso(err.message, "error");
+      }
+    });
+    // El botón se pinta dentro del saldo, así que se escucha en su contenedor
+    $("#mi-estado").addEventListener("click", async (e) => {
+      if (e.target.id !== "cancelar-baja") return;
+      try {
+        await rpc("cancelar_baja");
+        aviso("Baja cancelada. ¡Sigues en la peña!");
+        await cargarDatos();
+      } catch (err) {
+        aviso(err.message, "error");
+      }
     });
 
     $("#abrir-pago").addEventListener("click", () => {

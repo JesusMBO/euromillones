@@ -32,6 +32,16 @@
         <ul class="lista" id="lista-avisos"></ul>
       </section>
 
+      <!-- Bajas pedidas (solo se muestra si hay alguna) -->
+      <section class="card hidden" id="bajas">
+        <div class="section-head">
+          <h2>Bajas pedidas</h2>
+          <span class="tag" id="n-bajas"></span>
+        </div>
+        <p class="muted small">Devuélvele el saldo por Bizum o transferencia y después pulsa «Tramitar baja»: se apunta la devolución y la cuenta pasa a baja.</p>
+        <ul class="lista" id="lista-bajas"></ul>
+      </section>
+
       <!-- Sorteo de la semana -->
       <section class="card" id="semana"></section>
 
@@ -78,7 +88,7 @@
   <script>
     if (!CONFIGURADO) avisoSinConfigurar();
 
-    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0, ultimoCierre = null;
+    let perfil, ajustes, perfiles = [], saldos = {}, bote = 0, ultimoCierre = null, bajasPedidas = [];
 
     async function iniciar() {
       try {
@@ -96,17 +106,19 @@
     }
 
     async function cargarDatos() {
-      const [rPerfiles, rSaldos, rBote, rAjustes, rAvisos, rSorteo, rCierre] = await Promise.all([
+      const [rPerfiles, rSaldos, rBote, rAjustes, rAvisos, rSorteo, rCierre, rBajas] = await Promise.all([
         sb.from("perfiles").select("*").order("nombre"),
         rpc("ver_saldos"),
         rpc("ver_bote"),
         sb.from("ajustes").select("*").single(),
         sb.from("avisos_pago").select("*").eq("estado", "pendiente").order("creado"),
         sb.from("sorteos").select("*").order("id", { ascending: false }).limit(1).maybeSingle(),
-        sb.from("cierres").select("*").order("id", { ascending: false }).limit(1).maybeSingle()
+        sb.from("cierres").select("*").order("id", { ascending: false }).limit(1).maybeSingle(),
+        sb.from("solicitudes_baja").select("*").eq("estado", "pendiente").order("creado")
       ]);
-      for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo, rCierre]) if (r.error) throw new Error(textoError(r.error));
+      for (const r of [rPerfiles, rAjustes, rAvisos, rSorteo, rCierre, rBajas]) if (r.error) throw new Error(textoError(r.error));
       ultimoCierre = rCierre.data;
+      bajasPedidas = rBajas.data;
 
       perfiles = rPerfiles.data;
       ajustes = rAjustes.data;
@@ -115,6 +127,7 @@
       rSaldos.forEach(s => (saldos[s.id] = Number(s.saldo)));
 
       pintarAvisos(rAvisos.data);
+      pintarBajas();
       pintarSemana(rSorteo.data);
       pintarPerfiles();
     }
@@ -150,6 +163,39 @@
         ? () => rpc("confirmar_aviso", { p_aviso: Number(b.dataset.confirmar) })
         : () => rpc("rechazar_aviso", { p_aviso: Number(b.dataset.rechazar) }),
         b.dataset.confirmar ? "Pago confirmado y sumado al saldo." : "Aviso rechazado.");
+    });
+
+    // ---------- Bajas ----------
+
+    function pintarBajas() {
+      $("#bajas").classList.toggle("hidden", !bajasPedidas.length);
+      $("#n-bajas").textContent = `${bajasPedidas.length} pendientes`;
+      $("#lista-bajas").innerHTML = bajasPedidas.map(b => `
+        <li class="mov">
+          <div>
+            <div class="mov-tipo">${escapeHtml(nombreDe(b.perfil_id))} · devolver <b>${euro(Math.max(saldos[b.perfil_id] || 0, 0))}</b></div>
+            <div class="muted small">Pedida el ${fecha(b.creado)}${b.nota ? " · " + escapeHtml(b.nota) : ""}</div>
+          </div>
+          <div class="acciones">
+            ${b.perfil_id === perfil.id ? `<span class="tag">la tramita otro admin</span>` : `
+              <button class="btn-ghost ok" data-tramitar="${b.id}" type="button">Tramitar baja</button>
+              <button class="btn-ghost danger" data-rechazar-baja="${b.id}" type="button">✕</button>`}
+          </div>
+        </li>`).join("");
+    }
+
+    $("#lista-bajas").addEventListener("click", async (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      const sol = bajasPedidas.find(x => String(x.id) === (b.dataset.tramitar || b.dataset.rechazarBaja));
+      const quien = nombreDe(sol?.perfil_id);
+      if (b.dataset.tramitar) {
+        const importe = euro(Math.max(saldos[sol.perfil_id] || 0, 0));
+        if (!confirm(`¿Ya le has devuelto ${importe} a ${quien}?\n\nSe apuntará la devolución y su cuenta pasará a baja.`)) return;
+        return accion(b, () => rpc("tramitar_baja", { p_solicitud: Number(b.dataset.tramitar) }), `Baja de ${quien} tramitada.`);
+      }
+      if (!confirm(`¿Rechazar la baja de ${quien}? Seguirá en la peña como hasta ahora.`)) return;
+      await accion(b, () => rpc("rechazar_baja", { p_solicitud: Number(b.dataset.rechazarBaja) }), "Solicitud rechazada.");
     });
 
     // ---------- Sorteo de la semana ----------
@@ -296,7 +342,8 @@
       // No hay sorteo abierto: previsión del próximo cierre automático
       const cuota = Number(ajustes.cuota_semanal);
       const sinDni = perfiles.filter(p => p.estado === "activo" && !(p.dni && p.acepta_normas));
-      const juegan = perfiles.filter(p => p.estado === "activo" && p.dni && p.acepta_normas && (saldos[p.id] || 0) >= cuota).length;
+      const conBaja = new Set(bajasPedidas.map(b => b.perfil_id));
+      const juegan = perfiles.filter(p => p.estado === "activo" && p.dni && p.acepta_normas && !conBaja.has(p.id) && (saldos[p.id] || 0) >= cuota).length;
       const recaudado = juegan * cuota;
       const apuestas = Math.floor((recaudado + bote) / precio);
       const boteDespues = recaudado + bote - apuestas * precio;

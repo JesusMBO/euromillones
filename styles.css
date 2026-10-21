@@ -230,6 +230,9 @@ input:focus, select:focus {
   cursor: pointer;
 }
 .link.danger { color: var(--neg); }
+.link-claro { color: #fff; text-decoration: underline; margin-top: 8px; }
+.centro .link { margin-top: 0; font-size: inherit; }
+.btn.btn-peligro { background: var(--neg); }
 
 .msg {
   margin-top: 18px;
