@@ -92,9 +92,10 @@
         });
         if (error) {
           const m = error.message.toLowerCase();
+          // El detalle técnico ayuda al administrador a encontrar el fallo
           return mostrar(m.includes("rate limit") || m.includes("seconds")
             ? "Se han enviado demasiados correos. Espera un minuto e inténtalo de nuevo."
-            : "No se pudo enviar el correo. Inténtalo de nuevo.", "error");
+            : `No se pudo enviar el correo. Inténtalo de nuevo. (Detalle: ${error.message})`, "error");
         }
         $("#email-enviado").textContent = email;
         $("#paso-email").classList.add("hidden");
