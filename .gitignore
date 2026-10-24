@@ -1,6 +1,9 @@
 # Configuración local de la app de Claude
 .claude/
 
+# Guía para Claude: solo en este PC (el repositorio es público)
+CLAUDE.md
+
 # Variables de entorno y secretos (nunca subir)
 .env
 .env.*
