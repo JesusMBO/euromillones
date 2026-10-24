@@ -51,8 +51,8 @@ Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supab
 
 ### 2. Login por email
 En **Authentication → URL Configuration**:
-- *Site URL*: `https://jesusmbo.github.io/euromillones/`
-- *Redirect URLs*: `https://jesusmbo.github.io/euromillones/inicio.html` y, para probar en local, `http://localhost:5500/inicio.html`
+- *Site URL*: `https://jmboweb.github.io/euromillones/`
+- *Redirect URLs*: `https://jmboweb.github.io/euromillones/inicio.html` y, para probar en local, `http://localhost:5500/inicio.html`
 
 En **Authentication → Emails → Magic Link**, añade el código al texto del correo para poder entrar desde otro dispositivo:
 ```html
@@ -68,7 +68,7 @@ El correo de pruebas de Supabase solo envía unos pocos emails por hora. Para us
    - Remitente `eurocomissio@gmail.com`, nombre `EuromillonesCAIB`
 
 ### 4. Publicar en GitHub Pages
-En GitHub → repositorio → **Settings → Pages**: *Deploy from a branch*, rama `main`, carpeta `/ (root)`. La web quedará en `https://jesusmbo.github.io/euromillones/`.
+En GitHub → repositorio → **Settings → Pages**: *Deploy from a branch*, rama `main`, carpeta `/ (root)`. La web quedará en `https://jmboweb.github.io/euromillones/`.
 
 ### 5. Primer administrador
 Entra en la web con tu email y pon tu nombre. Después, en el **SQL Editor** de Supabase:
