@@ -27,26 +27,16 @@ Los importes (1 €, 2,50 € y 2.000 €) están en la tabla `ajustes` de Supab
 | `admin.html` | Confirmar Bizums, cerrar semana, resultados, participantes |
 | `app.js` | Funciones comunes |
 | `config.js` | Dirección y clave pública de Supabase |
-| `supabase/sql/01_esquema.sql` | Base de datos, reglas de seguridad y toda la lógica del dinero |
-| `supabase/sql/02_resguardos.sql` | Carpeta de resguardos y marcar sorteos como jugados |
-| `supabase/sql/03_eliminar_pendientes.sql` | Eliminar cuentas pendientes creadas por error |
-| `supabase/sql/04_correcciones.sql` | Corregir sorteos apuntados mal |
-| `supabase/sql/05_reparto_premios.sql` | Reparto según el reglamento: saldos o cobro en el banco |
-| `supabase/sql/06_dni_normas.sql` | DNI/NIE y aceptación de las normas |
-| `supabase/sql/07_acta.sql` | Datos del acta de cada sorteo (DNI parcial y porcentajes) |
-| `supabase/sql/08_cierre_automatico.sql` | Cierre automático de los jueves (pg_cron) y registro de cierres |
-| `supabase/sql/09_bajas.sql` | Pedir la baja y tramitarla con la devolución del saldo |
-| `supabase/sql/10_borrar_usuario_baja.sql` | Función `BorrarUsuarioBajaSinJugar('email')` para borrar del todo, desde el SQL Editor, a quien está de baja y nunca ha jugado |
-| `supabase/sql/11_eliminar_baja_web.sql` | Lo mismo desde el botón «Eliminar definitivamente» de Administrar |
-| `supabase/sql/12_limpieza.sql` | Borra la función `guardar_nombre`, que ya no se usa |
 | `normas.html` | Normas de la peña |
 | `acta.html` | Acta imprimible de cada sorteo |
+
+Los scripts SQL de la base de datos (tablas, reglas de seguridad y toda la lógica del dinero) no se publican en este repositorio: los guarda el administrador.
 
 ## Puesta en marcha (una sola vez)
 
 ### 1. Supabase
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (región Europa).
-2. **SQL Editor → New query**: pega todo `supabase/sql/01_esquema.sql` y pulsa **Run**. Después haz lo mismo, cada uno en una consulta nueva y en orden, con `02_resguardos.sql`, `03_eliminar_pendientes.sql`, `04_correcciones.sql`, `05_reparto_premios.sql`, `06_dni_normas.sql`, `07_acta.sql`, `08_cierre_automatico.sql`, `09_bajas.sql`, `10_borrar_usuario_baja.sql`, `11_eliminar_baja_web.sql` y `12_limpieza.sql`.
+2. **SQL Editor → New query**: ejecuta en orden, cada uno en una consulta nueva, los scripts SQL de la base de datos (los guarda el administrador, no están en este repositorio).
 3. **Project Settings → API**: copia la *Project URL* y la clave *publishable / anon* en `config.js`. **Nunca** la clave `service_role` / `secret`.
 
 ### 2. Login por email
